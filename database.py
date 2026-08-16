@@ -14,6 +14,7 @@ def init_db():
         description TEXT DEFAULT '',
         photo_file_id TEXT,
         delivery_info TEXT DEFAULT '',
+        totp_secret TEXT DEFAULT '',
         quantity INTEGER DEFAULT 1,
         active INTEGER DEFAULT 1,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -25,9 +26,19 @@ def init_db():
         buyer_username TEXT,
         payment_photo_file_id TEXT,
         status TEXT DEFAULT 'pending',
+        khqr_md5 TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         approved_at TEXT
     )""")
+    # --- lightweight migrations for DBs created before these columns existed ---
+    for table, col, decl in [
+        ("items", "totp_secret", "TEXT DEFAULT ''"),
+        ("orders", "khqr_md5", "TEXT"),
+    ]:
+        try:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
     c.execute("""CREATE TABLE IF NOT EXISTS admins (
         chat_id INTEGER PRIMARY KEY,
         username TEXT,
@@ -176,7 +187,7 @@ def get_item(item_id):
 
 def update_item_field(item_id, field, value):
     allowed = {"category", "name", "price", "description", "photo_file_id",
-               "delivery_info", "quantity", "active", "warranty_days", "published"}
+               "delivery_info", "totp_secret", "quantity", "active", "warranty_days", "published"}
     if field not in allowed:
         raise ValueError("bad field")
     with get_conn() as conn:
@@ -227,6 +238,11 @@ def update_order_status(order_id, status):
 def set_order_approved(order_id):
     with get_conn() as conn:
         conn.execute("UPDATE orders SET status = 'approved', approved_at = CURRENT_TIMESTAMP WHERE id = ?", (order_id,))
+
+
+def set_order_khqr_md5(order_id, md5):
+    with get_conn() as conn:
+        conn.execute("UPDATE orders SET khqr_md5 = ? WHERE id = ?", (md5, order_id))
 
 
 def get_orders_by_buyer(chat_id, limit=20):
