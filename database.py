@@ -1,5 +1,6 @@
 import sqlite3
 from contextlib import contextmanager
+from premium_emoji import entities_for
 from config import DB_PATH, OWNER_IDS
 
 
