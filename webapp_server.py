@@ -214,12 +214,33 @@ def api_order_status(order_id):
                 _auto_approve_and_deliver(order_id, order, item)
                 order = db.get_order(order_id)
 
-    resp = {"status": order["status"]}
+    resp = {"status": order["status"], "order_id": order["id"]}
     if order["status"] == "approved":
         item = db.get_item(order["item_id"])
         resp["delivery_info"] = build_delivery_message(item) if item else ""
         resp["item_name"] = item["name"] if item else ""
+        resp["has_totp"] = bool(item and item["totp_secret"]) if item else False
     return jsonify(resp)
+
+
+@app.route("/api/order/<int:order_id>/refresh-code")
+def api_order_refresh_code(order_id):
+    """Called by the Mini App's 'Refresh Code' button once the stale 30s code in the
+    original delivery message no longer works - returns a fresh live TOTP code."""
+    init_data = request.args.get("init_data", "")
+    user = verify_webapp_init_data(init_data, STORE_BOT_TOKEN)
+    order = db.get_order(order_id)
+    if not order or not user or order["buyer_chat_id"] != user["id"] or order["status"] != "approved":
+        return jsonify({"error": "not_found"}), 404
+    item = db.get_item(order["item_id"])
+    secret = item["totp_secret"] if item else ""
+    if not secret:
+        return jsonify({"error": "no_totp"}), 400
+    from utils import get_totp_code
+    code = get_totp_code(secret)
+    if not code:
+        return jsonify({"error": "generation_failed"}), 500
+    return jsonify({"code": code})
 
 
 @app.route("/api/my-orders")
