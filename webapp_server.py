@@ -333,6 +333,7 @@ def api_admin_items_create():
         return jsonify({"error": "bad_number"}), 400
     description = request.form.get("description", "").strip()
     delivery_info = request.form.get("delivery_info", "").strip()
+    totp_secret = request.form.get("totp_secret", "").strip()
 
     if not category or not name or price <= 0:
         return jsonify({"error": "missing_fields"}), 400
@@ -347,6 +348,8 @@ def api_admin_items_create():
         photo.save(photo_path)
 
     item_id = db.add_item(category, name, price, description, photo_path, delivery_info, quantity, warranty_days)
+    if totp_secret:
+        db.update_item_field(item_id, "totp_secret", totp_secret)
     return jsonify({"item_id": item_id})
 
 
@@ -361,15 +364,24 @@ def api_admin_items_update(item_id):
 
     payload = request.form if request.form else (request.get_json(silent=True) or {})
     allowed = {"name": str, "price": float, "description": str, "quantity": int,
-               "delivery_info": str, "active": int, "warranty_days": int}
+               "delivery_info": str, "totp_secret": str, "active": int, "warranty_days": int}
+    clearable = {"delivery_info", "totp_secret"}  # "-" is the clear sentinel, matching the bot's /additem flow
     updated = []
     for field, cast in allowed.items():
-        if field in payload and payload[field] not in (None, ""):
-            try:
-                db.update_item_field(item_id, field, cast(payload[field]))
-                updated.append(field)
-            except ValueError:
-                return jsonify({"error": f"bad_value_for_{field}"}), 400
+        if field not in payload:
+            continue
+        raw = payload[field]
+        if field in clearable and raw == "-":
+            db.update_item_field(item_id, field, "")
+            updated.append(field)
+            continue
+        if raw in (None, ""):
+            continue
+        try:
+            db.update_item_field(item_id, field, cast(raw))
+            updated.append(field)
+        except ValueError:
+            return jsonify({"error": f"bad_value_for_{field}"}), 400
 
     photo = request.files.get("photo") if request.files else None
     if photo and photo.filename:
