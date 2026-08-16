@@ -206,8 +206,12 @@
     border-radius:50%; margin:8px auto 16px; animation:spin .8s linear infinite; }
   .co-delivery{ text-align:left; background:var(--card); border:1px solid rgba(53,214,138,.3); border-radius:14px;
     padding:14px; font-size:13px; line-height:1.7; white-space:pre-wrap; margin:14px 0; color:var(--cloud); }
+  .co-delivery code{ background:rgba(79,209,255,.12); color:var(--blue); padding:2px 6px; border-radius:6px;
+    font-size:12.5px; font-family:'SFMono-Regular',Consolas,monospace; }
   .co-copybtn{ margin-top:8px; font-size:12px; padding:8px 14px; border-radius:10px; border:1px solid var(--line);
     background:var(--card); color:var(--gold-1); cursor:pointer; }
+  .co-refreshbtn{ margin-top:8px; margin-left:8px; font-size:12px; padding:8px 14px; border-radius:10px; border:1px solid var(--line);
+    background:var(--card); color:var(--blue); cursor:pointer; }
 </style>
 </head>
 <body data-bot="{{ bot_username }}">
@@ -326,6 +330,19 @@ let homeState = { search: '', min: 0, max: 999999 };
 const CAT_ICONS = { 'Account':'👤', 'Fruit':'🍈', 'Gamepass':'🎮', 'Evade':'🏃', 'Robux':'💎', 'Blade Ball':'⚔️', 'MM2':'🔪' };
 
 function haptic(){ tg?.HapticFeedback?.impactOccurred('light'); }
+
+// Very small formatter: turns the bot's `code` / *bold* markdown into safe HTML for the
+// delivery card. Escapes everything else first so item names etc. can't inject markup.
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function formatDeliveryText(raw){
+  let s = escapeHtml(raw);
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\*([^*]+)\*/g, '<b>$1</b>');
+  s = s.replace(/_([^_]+)_/g, '<i>$1</i>');
+  return s;
+}
 
 function buildFX(){
   const fx = document.querySelector('.fx');
@@ -576,6 +593,7 @@ function renderPaymentStage(it, quote, initData){
       <div class="co-price">$${quote.price}</div>
       ${quote.qr_url ? `<div class="co-qr"><img src="${quote.qr_url}"></div>` : `<div class="co-sub">⚠️ ម្ចាស់ហាងមិនទាន់កំណត់ QR ទេ សូមទាក់ទងផ្ទាល់</div>`}
       ${quote.note ? `<div class="co-note">${quote.note}</div>` : ''}
+      ${quote.khqr_md5 ? `<div class="co-sub">✨ ការទូទាត់នេះនឹងត្រូវបានផ្ទៀងផ្ទាត់ស្វ័យប្រវត្តិ បន្ទាប់ពីអ្នកបង់ប្រាក់ពិត</div>` : ''}
       <label class="co-upload" id="uploadLabel">📎 ចុចដើម្បីជ្រើសរើស Screenshot ទូទាត់
         <input type="file" accept="image/*" id="paymentFile" style="display:none;">
       </label>
@@ -596,6 +614,9 @@ function renderPaymentStage(it, quote, initData){
     haptic(); submitBtn.disabled = true; submitBtn.textContent = '⏳ កំពុងផ្ញើ...';
     const fd = new FormData();
     fd.append('init_data', initData); fd.append('item_id', it.id); fd.append('photo', fileInput.files[0]);
+    // Pass the md5 of the KHQR shown above (if any) so the backend can poll Bakong for
+    // *this exact* bill and auto-approve the moment it's actually paid.
+    if (quote.khqr_md5) fd.append('khqr_md5', quote.khqr_md5);
     try{
       const res = await fetch('/api/order/submit', {method:'POST', body: fd});
       const data = await res.json();
@@ -612,27 +633,51 @@ function renderWaitingStage(orderId, initData){
   coStage(`<div class="co"><div class="co-spin"></div><div class="co-title">⏳ រង់ចាំម្ចាស់ហាងផ្ទៀងផ្ទាត់</div>
     <div class="co-sub">Order #${orderId} — ជាធម្មតាមិនយូរទេ សូមមេត្តារង់ចាំ</div></div>`);
   if (window._pollTimer) clearInterval(window._pollTimer);
+  // Polling this endpoint is also what triggers the backend's Bakong auto-verify check
+  // (see api_order_status) - so this loop is what makes auto-confirm actually happen.
   window._pollTimer = setInterval(async ()=>{
     try{
       const res = await fetch(`/api/order/${orderId}/status?init_data=${encodeURIComponent(initData)}`);
       const data = await res.json();
-      if (data.status === 'approved'){ clearInterval(window._pollTimer); haptic(); renderApprovedStage(data); }
+      if (data.status === 'approved'){ clearInterval(window._pollTimer); haptic(); renderApprovedStage(data, initData); }
       else if (data.status === 'rejected'){ clearInterval(window._pollTimer); renderRejectedStage(); }
     }catch(e){ /* keep polling */ }
   }, 3000);
 }
 
-function renderApprovedStage(data){
+function renderApprovedStage(data, initData){
   const hasInfo = data.delivery_info && data.delivery_info.trim();
   coStage(`
     <div class="co">
       <div class="co-title">🎉 ការទូទាត់ត្រូវបានអនុម័ត!</div>
       <div class="co-sub">${data.item_name} — សូមអរគុណដែលទិញនៅ Uchiro Store 🇰🇭</div>
-      ${hasInfo ? `<div class="co-delivery" id="deliveryText">🔑 ${data.delivery_info}</div>
-        <button class="co-copybtn" onclick="navigator.clipboard.writeText(document.getElementById('deliveryText').textContent); haptic();">📋 Copy</button>`
+      ${hasInfo ? `<div class="co-delivery" id="deliveryText">${formatDeliveryText(data.delivery_info)}</div>
+        <button class="co-copybtn" id="copyDeliveryBtn">📋 Copy</button>
+        ${data.has_totp ? `<button class="co-refreshbtn" id="refreshCodeBtn">🔄 Refresh Code</button>` : ''}`
         : `<div class="co-note">ម្ចាស់ហាងនឹងផ្ញើព័ត៌មានឲ្យអ្នកឆាប់ៗនេះតាម Telegram Chat</div>`}
       <button class="co-btn primary" onclick="closeSheet()">✅ រួចរាល់</button>
     </div>`);
+  if (hasInfo){
+    document.getElementById('copyDeliveryBtn').onclick = ()=>{
+      navigator.clipboard.writeText(document.getElementById('deliveryText').innerText);
+      haptic();
+    };
+  }
+  if (data.has_totp){
+    document.getElementById('refreshCodeBtn').onclick = async ()=>{
+      haptic();
+      try{
+        const res = await fetch(`/api/order/${data.order_id}/refresh-code?init_data=${encodeURIComponent(initData)}`);
+        const j = await res.json();
+        if (j.code){
+          // Swap only the last 6-digit <code> block (the live code line) rather than
+          // re-rendering the whole card, so the setup instructions above stay put.
+          const codeEls = document.querySelectorAll('#deliveryText code');
+          if (codeEls.length) codeEls[codeEls.length - 1].textContent = j.code;
+        }
+      }catch(e){ /* ignore, button stays clickable to retry */ }
+    };
+  }
 }
 
 function renderRejectedStage(){
