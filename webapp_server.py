@@ -16,7 +16,8 @@ from flask import Flask, jsonify, render_template, send_from_directory, request
 import database as db
 from config import (STORE_BOT_USERNAME, CATEGORIES, STORE_CHANNEL_USERNAME, STORE_BOT_TOKEN,
                      ADMIN_BOT_TOKEN, CURRENCY, ADMIN_CONTACT_USERNAME)
-from utils import format_price, generate_khqr_image, verify_webapp_init_data
+from utils import (format_price, generate_khqr_image, generate_khqr_with_md5,
+                    verify_webapp_init_data, check_khqr_paid, build_delivery_message)
 
 app = Flask(__name__, template_folder="webapp/templates")
 
@@ -113,10 +114,10 @@ def api_order_quote():
     if not item or not item["active"] or item["quantity"] <= 0:
         return jsonify({"error": "out_of_stock"}), 400
 
-    qr_path = None
+    qr_path, khqr_md5 = None, None
     khqr_account = db.get_setting("khqr_account_id")
     if khqr_account:
-        qr_path = generate_khqr_image(
+        qr_path, khqr_md5 = generate_khqr_with_md5(
             khqr_account, db.get_setting("khqr_merchant_name", "Uchiro Store"),
             db.get_setting("khqr_merchant_city", "Phnom Penh"), item["price"], f"WEB{item['id']}"
         )
@@ -129,6 +130,9 @@ def api_order_quote():
         "price": item["price"],
         "warranty_days": item["warranty_days"],
         "qr_url": f"/{qr_path}" if qr_path and os.path.exists(qr_path) else None,
+        # Frontend must send this back unchanged in /api/order/submit so the backend
+        # can poll Bakong for *this exact* bill later and auto-approve on payment.
+        "khqr_md5": khqr_md5,
         "note": db.get_setting("payment_note", ""),
     })
 
@@ -137,6 +141,7 @@ def api_order_quote():
 def api_order_submit():
     init_data = request.form.get("init_data", "")
     item_id = request.form.get("item_id", type=int)
+    khqr_md5 = request.form.get("khqr_md5") or None  # from the /api/order/quote response, if KHQR was shown
     photo = request.files.get("photo")
 
     user = verify_webapp_init_data(init_data, STORE_BOT_TOKEN)
@@ -156,12 +161,37 @@ def api_order_submit():
     photo.save(save_path)
 
     order_id = db.create_order(item_id, user["id"], user.get("username"), save_path)
+    if khqr_md5:
+        db.set_order_khqr_md5(order_id, khqr_md5)
     try:
         _notify_admins_of_order(order_id)
     except Exception as e:
         print(f"admin notify error: {e}")
 
     return jsonify({"order_id": order_id})
+
+
+def _auto_approve_and_deliver(order_id, order, item):
+    """Same effect as an admin tapping ✅ in the bot, triggered by a confirmed
+    Bakong payment instead of a manual tap. Notifies the buyer over Telegram too,
+    per the brief's 'chat as backup channel' requirement."""
+    db.set_order_approved(order_id)
+    db.decrement_stock(item["id"])
+    if item["category"] == "Account":
+        db.grant_spin_credit(order["buyer_chat_id"], 1)
+    try:
+        from telegram import Bot
+        msg = "🎉 ការទូទាត់ត្រូវបានផ្ទៀងផ្ទាត់ស្វ័យប្រវត្តិ! អរគុណដែលទិញនៅ Uchiro Store 🇰🇭\n\n" + build_delivery_message(item)
+        bot = Bot(token=STORE_BOT_TOKEN)
+
+        async def _send():
+            try:
+                await bot.send_message(order["buyer_chat_id"], msg, parse_mode="Markdown")
+            except Exception:
+                await bot.send_message(order["buyer_chat_id"], msg)
+        asyncio.run(_send())
+    except Exception as e:
+        print(f"auto-approve notify error: {e}")
 
 
 @app.route("/api/order/<int:order_id>/status")
@@ -172,10 +202,22 @@ def api_order_status(order_id):
     if not order or not user or order["buyer_chat_id"] != user["id"]:
         return jsonify({"error": "not_found"}), 404
 
+    # While still pending and we have a khqr_md5 on file, check with Bakong whether
+    # this exact bill has actually been paid yet. True -> auto-approve right now.
+    # False/None (unpaid, no token, network hiccup) -> leave it pending; manual
+    # admin review in the bot always remains the fallback, nothing is ever stuck.
+    if order["status"] == "pending" and order["khqr_md5"]:
+        paid = check_khqr_paid(order["khqr_md5"])
+        if paid:
+            item = db.get_item(order["item_id"])
+            if item and item["active"] and item["quantity"] > 0:
+                _auto_approve_and_deliver(order_id, order, item)
+                order = db.get_order(order_id)
+
     resp = {"status": order["status"]}
     if order["status"] == "approved":
         item = db.get_item(order["item_id"])
-        resp["delivery_info"] = item["delivery_info"] if item else ""
+        resp["delivery_info"] = build_delivery_message(item) if item else ""
         resp["item_name"] = item["name"] if item else ""
     return jsonify(resp)
 
