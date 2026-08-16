@@ -12,7 +12,7 @@ import os
 import uuid
 import asyncio
 from flask import Flask, jsonify, render_template, send_from_directory, request
-
+from premium_emoji import entities_for
 import database as db
 from config import (STORE_BOT_USERNAME, CATEGORIES, STORE_CHANNEL_USERNAME, STORE_BOT_TOKEN,
                      ADMIN_BOT_TOKEN, CURRENCY, ADMIN_CONTACT_USERNAME)
