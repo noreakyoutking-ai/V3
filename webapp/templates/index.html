@@ -702,5 +702,104 @@ if (window.DeviceOrientationEvent){
 buildFX();
 loadItems();
 </script>
+
+<!-- ===== Premium Emoji Auto-Loader ===== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+<style>
+.premium-emoji{ width:1.2em; height:1.2em; display:inline-block; vertical-align:-0.2em; object-fit:contain; }
+.lottie-emoji{ width:1.2em; height:1.2em; display:inline-block; vertical-align:-0.2em; }
+</style>
+<script>
+let PREMIUM_EMOJI_MAP = null;
+let PREMIUM_EMOJI_PATTERN = null;
+
+function replaceEmojisIn(root){
+  if (!PREMIUM_EMOJI_MAP) return;
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode:(node)=>{
+      const tag = node.parentNode && node.parentNode.nodeName;
+      if (tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+      if (node.parentNode && node.parentNode.classList && node.parentNode.classList.contains('premium-emoji-done')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  const textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+  textNodes.forEach(node=>{
+    const text = node.nodeValue;
+    PREMIUM_EMOJI_PATTERN.lastIndex = 0;
+    if (!PREMIUM_EMOJI_PATTERN.test(text)) return;
+    PREMIUM_EMOJI_PATTERN.lastIndex = 0;
+
+    const frag = document.createDocumentFragment();
+    let lastIndex = 0, match;
+    while ((match = PREMIUM_EMOJI_PATTERN.exec(text)) !== null){
+      const before = text.slice(lastIndex, match.index);
+      if (before) frag.appendChild(document.createTextNode(before));
+
+      const filename = PREMIUM_EMOJI_MAP[match[0]];
+      const ext = filename.split('.').pop();
+      let el;
+      if (ext === 'webm'){
+        el = document.createElement('video');
+        el.src = `assets/emojis/${filename}`;
+        el.autoplay = true; el.loop = true; el.muted = true; el.playsInline = true;
+        el.className = 'premium-emoji';
+      } else if (ext === 'json'){
+        el = document.createElement('span');
+        el.className = 'lottie-emoji';
+        el.dataset.src = `assets/emojis/${filename}`;
+      } else {
+        el = document.createElement('img');
+        el.src = `assets/emojis/${filename}`;
+        el.alt = match[0];
+        el.className = 'premium-emoji';
+      }
+      frag.appendChild(el);
+      lastIndex = PREMIUM_EMOJI_PATTERN.lastIndex;
+    }
+    const after = text.slice(lastIndex);
+    if (after) frag.appendChild(document.createTextNode(after));
+    node.parentNode.replaceChild(frag, node);
+  });
+
+  if (window.lottie){
+    root.querySelectorAll ? root.querySelectorAll('.lottie-emoji').forEach(el=>{
+      if (el.dataset.inited) return;
+      el.dataset.inited = '1';
+      lottie.loadAnimation({ container: el, path: el.dataset.src, renderer:'svg', loop:true, autoplay:true });
+    }) : null;
+  }
+}
+
+async function loadPremiumEmojis(){
+  try{
+    const res = await fetch('assets/emoji-files.json');
+    PREMIUM_EMOJI_MAP = await res.json();
+  }catch(e){ return; }
+
+  const emojiChars = Object.keys(PREMIUM_EMOJI_MAP).sort((a,b)=>b.length-a.length);
+  if (emojiChars.length === 0) return;
+  PREMIUM_EMOJI_PATTERN = new RegExp(emojiChars.map(e=>e.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'g');
+
+  // ជំនួស emoji ដែលមានស្រាប់ពេល page load
+  replaceEmojisIn(document.body);
+
+  // ជំនួស emoji ថ្មីៗដែលបង្កើតដោយ JS ក្រោយមក (cards, orders, checkout stages, ...)
+  const observer = new MutationObserver(mutations=>{
+    for (const m of mutations){
+      m.addedNodes.forEach(node=>{
+        if (node.nodeType === 1 || node.nodeType === 3){
+          replaceEmojisIn(node.nodeType === 1 ? node : node.parentNode);
+        }
+      });
+    }
+  });
+  observer.observe(document.body, { childList:true, subtree:true, characterData:true });
+}
+document.addEventListener('DOMContentLoaded', loadPremiumEmojis);
+</script>
 </body>
 </html>
