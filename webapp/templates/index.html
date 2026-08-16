@@ -164,13 +164,15 @@
   .sheet-bg.show{ opacity:1; pointer-events:all; }
   .sheet{ position:fixed; left:0; right:0; bottom:0; z-index:31; background:var(--bg-2);
     border-top:1px solid var(--line); border-radius:22px 22px 0 0; max-width:520px; margin:0 auto;
-    transform:translateY(100%); transition:transform .28s cubic-bezier(.2,.9,.3,1); max-height:82vh; overflow-y:auto; }
+    transform:translateY(100%); transition:transform .28s cubic-bezier(.2,.9,.3,1), max-height .25s ease; max-height:82vh; overflow-y:auto; }
   .sheet.show{ transform:translateY(0); }
+  .sheet.fullpage{ max-height:95vh; }
   .sheet-handle{ width:38px; height:4px; background:var(--line); border-radius:99px; margin:10px auto 4px; }
   .sheet .thumb-big{ width:100%; aspect-ratio:4/3; background:linear-gradient(160deg,#181b2b,#0d0f18);
-    display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
   .sheet .thumb-big img{ width:100%; height:100%; object-fit:cover; }
-  .sheet-body{ padding:16px 18px 22px; }
+  .sheet .thumb-big.zoomable{ cursor:zoom-in; }
+  .sheet-body{ padding:16px 18px 10px; }
   .sheet-name{ font-size:18px; font-weight:700; }
   .sheet-badges{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
   .b{ font-size:11px; font-weight:700; padding:5px 10px; border-radius:8px; }
@@ -184,21 +186,25 @@
     font-weight:700; color:#06070c; background:linear-gradient(135deg, var(--blue), #8be9ff);
     box-shadow:0 8px 24px rgba(79,209,255,.3); }
 
-  .co{ padding:18px; text-align:center; }
+  .co{ padding:18px 18px 6px; text-align:center; }
   .co-title{ font-size:16px; font-weight:700; margin-bottom:4px; }
   .co-sub{ font-size:12.5px; color:var(--muted); margin-bottom:14px; }
-  .co-qr{ width:220px; height:220px; margin:0 auto 14px; border-radius:16px; overflow:hidden;
-    background:#fff; display:flex; align-items:center; justify-content:center; }
+  .co-qr{ width:220px; height:220px; margin:0 auto 6px; border-radius:16px; overflow:hidden;
+    background:#fff; display:flex; align-items:center; justify-content:center; position:relative; }
   .co-qr img{ width:100%; height:100%; object-fit:contain; }
-  .co-price{ font-family:'Anton',sans-serif; font-size:26px; letter-spacing:.5px; margin-bottom:10px;
+  .co-qr.zoomable{ cursor:zoom-in; }
+  .co-qr-hint{ font-size:11px; color:var(--muted); margin-bottom:14px; }
+  .co-price{ font-family:'Anton',sans-serif; font-size:26px; letter-spacing:.5px; margin-bottom:2px;
     background:linear-gradient(180deg, var(--gold-1), var(--gold-2)); -webkit-background-clip:text;
     background-clip:text; color:transparent; }
+  .co-price-old{ font-size:13px; color:var(--muted); text-decoration:line-through; margin-bottom:10px; }
   .co-note{ font-size:12px; color:var(--muted); white-space:pre-wrap; margin-bottom:14px; }
   .co-upload{ display:block; width:100%; padding:14px; border-radius:14px; border:2px dashed var(--line);
     background:var(--card); color:var(--muted); font-size:13px; cursor:pointer; margin-bottom:10px; }
   .co-upload.has-file{ border-color:var(--warranty); color:var(--warranty); }
   .co-btn{ width:100%; border:none; border-radius:14px; padding:14px 0; font-size:14px; font-weight:700;
     margin-top:6px; cursor:pointer; }
+  .co-btn:last-child{ margin-bottom:2px; }
   .co-btn.primary{ color:#06070c; background:linear-gradient(135deg, var(--blue), #8be9ff);
     box-shadow:0 8px 24px rgba(79,209,255,.3); }
   .co-btn.ghost{ color:var(--muted); background:transparent; border:1px solid var(--line); }
@@ -212,9 +218,44 @@
     background:var(--card); color:var(--gold-1); cursor:pointer; }
   .co-refreshbtn{ margin-top:8px; margin-left:8px; font-size:12px; padding:8px 14px; border-radius:10px; border:1px solid var(--line);
     background:var(--card); color:var(--blue); cursor:pointer; }
+
+  /* Coupon */
+  .coupon-row{ display:flex; gap:8px; margin-top:4px; margin-bottom:2px; }
+  .coupon-input{ flex:1; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 13px;
+    color:var(--cloud); font-size:13px; outline:none; font-family:inherit; }
+  .coupon-input::placeholder{ color:var(--muted); }
+  .coupon-apply{ flex-shrink:0; border:none; border-radius:12px; padding:0 16px; font-size:12.5px; font-weight:700;
+    color:#06070c; background:linear-gradient(135deg, var(--gold-1), var(--gold-2)); cursor:pointer; }
+  .coupon-msg{ font-size:11.5px; margin:6px 0 12px; min-height:14px; text-align:left; }
+  .coupon-msg.ok{ color:var(--warranty); }
+  .coupon-msg.err{ color:var(--danger); }
+
+  /* Login / authenticator guide */
+  .guide-box{ text-align:left; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:12px; }
+  .guide-title{ font-size:12.5px; font-weight:700; color:var(--gold-1); margin-bottom:8px; }
+  .guide-list{ margin:0; padding-left:18px; font-size:12px; line-height:1.9; color:var(--muted); }
+  .guide-list li{ margin-bottom:2px; }
+  .guide-list b{ color:var(--cloud); }
+  .guide-list code{ background:rgba(79,209,255,.12); color:var(--blue); padding:1px 5px; border-radius:5px; font-size:11.5px; }
+  .guide-video-box{ text-align:left; margin-top:10px; }
+  .guide-video{ width:100%; border-radius:14px; margin-top:6px; background:#000; display:block; }
+  .guide-video-empty{ margin-top:6px; background:var(--card); border:1px dashed var(--line); border-radius:14px;
+    padding:22px 14px; text-align:center; color:var(--muted); font-size:12px; }
+
+  /* Fullscreen image lightbox (zoom) */
+  .lightbox-bg{ position:fixed; inset:0; z-index:60; background:rgba(2,3,6,.94); display:flex; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity .2s; }
+  .lightbox-bg.show{ opacity:1; pointer-events:all; }
+  .lightbox-close{ position:absolute; top:calc(14px + env(safe-area-inset-top)); right:16px; width:36px; height:36px; border-radius:50%;
+    background:rgba(255,255,255,.08); border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+    color:var(--cloud); font-size:16px; z-index:61; cursor:pointer; }
+  .lightbox-img{ max-width:92vw; max-height:80vh; object-fit:contain; border-radius:12px; transition:transform .25s ease; cursor:zoom-in; }
+  .lightbox-img.zoomed{ transform:scale(2); cursor:zoom-out; }
+  .lightbox-hint{ position:absolute; bottom:calc(24px + env(safe-area-inset-bottom)); left:0; right:0; text-align:center;
+    color:var(--muted); font-size:11.5px; }
 </style>
 </head>
-<body data-bot="{{ bot_username }}">
+<body data-bot="{{ bot_username }}" data-login-video="{{ login_video_url }}">
 
   <div class="fx"><div class="glow"></div></div>
 
@@ -320,6 +361,12 @@
     <div id="sheetCheckoutStage" style="display:none;"></div>
   </div>
 
+  <div class="lightbox-bg" id="lightboxBg">
+    <div class="lightbox-close" id="lightboxClose">✕</div>
+    <img class="lightbox-img" id="lightboxImg" src="" alt="">
+    <div class="lightbox-hint">ចុចលើរូបភាព ដើម្បីពង្រីក/បង្រួម</div>
+  </div>
+
 <script>
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor?.('#06070c'); tg.setBackgroundColor?.('#06070c'); }
@@ -343,6 +390,25 @@ function formatDeliveryText(raw){
   s = s.replace(/_([^_]+)_/g, '<i>$1</i>');
   return s;
 }
+
+// ===== Fullscreen image lightbox (used for product/account photos + QR zoom) =====
+function openLightbox(url){
+  if (!url) return;
+  const img = document.getElementById('lightboxImg');
+  img.src = url; img.classList.remove('zoomed');
+  document.getElementById('lightboxBg').classList.add('show');
+  haptic();
+}
+function closeLightbox(){
+  document.getElementById('lightboxBg').classList.remove('show');
+  document.getElementById('lightboxImg').classList.remove('zoomed');
+}
+document.getElementById('lightboxClose').onclick = closeLightbox;
+document.getElementById('lightboxBg').onclick = (e)=>{ if (e.target.id === 'lightboxBg') closeLightbox(); };
+document.getElementById('lightboxImg').onclick = (e)=>{
+  e.stopPropagation();
+  document.getElementById('lightboxImg').classList.toggle('zoomed');
+};
 
 function buildFX(){
   const fx = document.querySelector('.fx');
@@ -537,10 +603,20 @@ function openSheet(it){
   haptic();
   document.getElementById('sheetDetailStage').style.display = '';
   document.getElementById('sheetCheckoutStage').style.display = 'none';
+  document.getElementById('sheet').classList.remove('fullpage');
   document.getElementById('sheetName').textContent = it.name;
   document.getElementById('sheetDesc').textContent = it.description || 'គ្មានពិពណ៌នាបន្ថែម';
   document.getElementById('sheetPrice').textContent = '$' + it.price;
-  document.getElementById('sheetThumb').innerHTML = it.photo_url ? `<img src="${it.photo_url}">` : `<div class="ph">${it.category==='Account'?'👤':'🍈'}</div>`;
+  const sheetThumb = document.getElementById('sheetThumb');
+  if (it.photo_url){
+    sheetThumb.innerHTML = `<img src="${it.photo_url}">`;
+    sheetThumb.classList.add('zoomable');
+    sheetThumb.onclick = ()=> openLightbox(it.photo_url);
+  } else {
+    sheetThumb.innerHTML = `<div class="ph">${it.category==='Account'?'👤':'🍈'}</div>`;
+    sheetThumb.classList.remove('zoomable');
+    sheetThumb.onclick = null;
+  }
   const badges = document.getElementById('sheetBadges');
   if (it.category === 'Account') {
     badges.innerHTML = `<div class="b stock">📦 ${it.category}</div><div class="b war">🛡️ Warranty 14ថ្ងៃ</div>`;
@@ -555,11 +631,13 @@ document.getElementById('sheetBg').onclick = closeSheet;
 function closeSheet(){
   document.getElementById('sheetBg').classList.remove('show');
   document.getElementById('sheet').classList.remove('show');
+  document.getElementById('sheet').classList.remove('fullpage');
   if (window._pollTimer) clearInterval(window._pollTimer);
 }
 
 function coStage(html){
   document.getElementById('sheetDetailStage').style.display = 'none';
+  document.getElementById('sheet').classList.add('fullpage');
   const stage = document.getElementById('sheetCheckoutStage');
   stage.style.display = ''; stage.innerHTML = html;
 }
@@ -587,11 +665,18 @@ async function startCheckout(it){
 }
 
 function renderPaymentStage(it, quote, initData){
+  let appliedCoupon = null;
   coStage(`
     <div class="co">
       <div class="co-title">🛍 ${quote.name}</div>
-      <div class="co-price">$${quote.price}</div>
-      ${quote.qr_url ? `<div class="co-qr"><img src="${quote.qr_url}"></div>` : `<div class="co-sub">⚠️ ម្ចាស់ហាងមិនទាន់កំណត់ QR ទេ សូមទាក់ទងផ្ទាល់</div>`}
+      <div class="co-price-old" id="coPriceOld" style="display:none;"></div>
+      <div class="co-price" id="coPriceMain">$${quote.price}</div>
+      <div class="coupon-row">
+        <input type="text" id="couponInput" class="coupon-input" placeholder="🎟 កូដបញ្ចុះតម្លៃ (បើមាន)">
+        <button class="coupon-apply" id="couponApplyBtn">អនុវត្ត</button>
+      </div>
+      <div class="coupon-msg" id="couponMsg"></div>
+      ${quote.qr_url ? `<div class="co-qr zoomable" id="coQrBox"><img src="${quote.qr_url}"></div><div class="co-qr-hint">🔍 ចុចលើ QR ដើម្បីពង្រីក</div>` : `<div class="co-sub">⚠️ ម្ចាស់ហាងមិនទាន់កំណត់ QR ទេ សូមទាក់ទងផ្ទាល់</div>`}
       ${quote.note ? `<div class="co-note">${quote.note}</div>` : ''}
       ${quote.khqr_md5 ? `<div class="co-sub">✨ ការទូទាត់នេះនឹងត្រូវបានផ្ទៀងផ្ទាត់ស្វ័យប្រវត្តិ បន្ទាប់ពីអ្នកបង់ប្រាក់ពិត</div>` : ''}
       <label class="co-upload" id="uploadLabel">📎 ចុចដើម្បីជ្រើសរើស Screenshot ទូទាត់
@@ -600,6 +685,37 @@ function renderPaymentStage(it, quote, initData){
       <button class="co-btn primary" id="submitOrderBtn" disabled>✅ ផ្ញើ Screenshot បញ្ជាក់</button>
       <button class="co-btn ghost" id="cancelCheckoutBtn">❌ បោះបង់</button>
     </div>`);
+
+  if (quote.qr_url){
+    document.getElementById('coQrBox').onclick = ()=> openLightbox(quote.qr_url);
+  }
+
+  document.getElementById('couponApplyBtn').onclick = async ()=>{
+    const code = document.getElementById('couponInput').value.trim();
+    const msg = document.getElementById('couponMsg');
+    if (!code){ msg.textContent = 'សូមវាយកូដមុនសិន'; msg.className = 'coupon-msg err'; return; }
+    haptic();
+    msg.textContent = 'កំពុងពិនិត្យ...'; msg.className = 'coupon-msg';
+    try{
+      const res = await fetch('/api/order/apply-coupon', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ item_id: it.id, code })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'invalid');
+      appliedCoupon = code;
+      const oldEl = document.getElementById('coPriceOld');
+      oldEl.textContent = '$' + quote.price; oldEl.style.display = '';
+      document.getElementById('coPriceMain').textContent = '$' + data.price;
+      quote.price = data.price;
+      msg.textContent = `✅ បញ្ចុះតម្លៃដោយជោគជ័យ${data.message ? ' — ' + data.message : ''}`;
+      msg.className = 'coupon-msg ok';
+    }catch(e){
+      msg.textContent = '❌ កូដមិនត្រឹមត្រូវ ឬផុតកំណត់';
+      msg.className = 'coupon-msg err';
+    }
+  };
+
   const fileInput = document.getElementById('paymentFile');
   const label = document.getElementById('uploadLabel');
   const submitBtn = document.getElementById('submitOrderBtn');
@@ -617,6 +733,7 @@ function renderPaymentStage(it, quote, initData){
     // Pass the md5 of the KHQR shown above (if any) so the backend can poll Bakong for
     // *this exact* bill and auto-approve the moment it's actually paid.
     if (quote.khqr_md5) fd.append('khqr_md5', quote.khqr_md5);
+    if (appliedCoupon) fd.append('coupon_code', appliedCoupon);
     try{
       const res = await fetch('/api/order/submit', {method:'POST', body: fd});
       const data = await res.json();
@@ -647,13 +764,30 @@ function renderWaitingStage(orderId, initData){
 
 function renderApprovedStage(data, initData){
   const hasInfo = data.delivery_info && data.delivery_info.trim();
+  const videoUrl = document.body.dataset.loginVideo || '';
   coStage(`
     <div class="co">
       <div class="co-title">🎉 ការទូទាត់ត្រូវបានអនុម័ត!</div>
       <div class="co-sub">${data.item_name} — សូមអរគុណដែលទិញនៅ Uchiro Store 🇰🇭</div>
       ${hasInfo ? `<div class="co-delivery" id="deliveryText">${formatDeliveryText(data.delivery_info)}</div>
         <button class="co-copybtn" id="copyDeliveryBtn">📋 Copy</button>
-        ${data.has_totp ? `<button class="co-refreshbtn" id="refreshCodeBtn">🔄 Refresh Code</button>` : ''}`
+        ${data.has_totp ? `<button class="co-refreshbtn" id="refreshCodeBtn">🔄 Refresh Code</button>` : ''}
+        <div class="guide-box">
+          <div class="guide-title">📲 របៀប Login + ដំឡើង App</div>
+          <ol class="guide-list">
+            <li>ទាញយកហ្គេម/App ដែលត្រូវការពី <b>App Store</b> (iPhone) ឬ <b>Play Store</b> (Android)</li>
+            ${data.has_totp
+              ? `<li>ទាញយក <b>Google Authenticator</b> ឬ <b>Authy</b> ពី App Store / Play Store</li>
+                 <li>Login គណនីខាងលើដោយប្រើ Username/Password</li>
+                 <li>ពេលវាសួរកូដសុវត្ថិភាព (2FA) បើក Authenticator App មើលលេខ 6ខ្ទង់ រួចវាយបញ្ចូល — លេខផ្លាស់រៀងរាល់ 30 វិនាទី ប្រើប៊ូតុង <b>🔄 Refresh Code</b> ខាងលើប្រសិនបើផុតកំណត់</li>`
+              : `<li>Login ដោយប្រើ Username/Password ខាងលើ</li>`}
+            <li>បើមានបញ្ហា Login សូមចុច 📞 ទាក់ទង Admin ខាងក្រោម</li>
+          </ol>
+        </div>
+        <div class="guide-video-box">
+          <div class="guide-title">🎬 វីដេអូបង្ហាញជាក់ស្តែង</div>
+          ${videoUrl ? `<video class="guide-video" controls playsinline src="${videoUrl}"></video>` : `<div class="guide-video-empty">📹 វីដេអូនឹងបន្ថែមឆាប់ៗនេះ</div>`}
+        </div>`
         : `<div class="co-note">ម្ចាស់ហាងនឹងផ្ញើព័ត៌មានឲ្យអ្នកឆាប់ៗនេះតាម Telegram Chat</div>`}
       <button class="co-btn primary" onclick="closeSheet()">✅ រួចរាល់</button>
     </div>`);
