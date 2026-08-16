@@ -18,6 +18,7 @@
     font-family:'Poppins','Noto Sans Khmer',sans-serif; overflow-x:hidden;}
   body{ padding-bottom:calc(72px + env(safe-area-inset-bottom)); padding-top:env(safe-area-inset-top);
     opacity:0; animation:appIn .5s ease forwards; }
+  body.hide-nav{ padding-bottom:env(safe-area-inset-bottom); }
   @keyframes appIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
   ::selection{ background:var(--gold-2); color:#06070c; }
 
@@ -30,7 +31,7 @@
   .bolt{ position:absolute; width:2px; background:linear-gradient(var(--blue), transparent); opacity:0; animation:flicker 5.5s ease-in infinite; }
   @keyframes flicker{ 0%,92%{opacity:0;} 93%{opacity:.9;} 94%{opacity:0;} 96%{opacity:.6;} 97%{opacity:0;} }
 
-  .wrap{ position:relative; z-index:1; max-width:520px; margin:0 auto; padding:0 14px; }
+  .wrap{ position:relative; z-index:1; max-width:520px; margin:0 auto; padding:0 14px; min-height:100vh; }
   .screen{ display:none; animation:screenIn .3s ease; }
   .screen.active{ display:block; }
   @keyframes screenIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
@@ -159,20 +160,16 @@
   .navitem.active .ni{ transform:translateY(-2px); }
   .navitem:active{ transform:scale(.92); }
 
-  .sheet-bg{ position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(3px); z-index:30;
-    opacity:0; pointer-events:none; transition:opacity .2s; }
-  .sheet-bg.show{ opacity:1; pointer-events:all; }
-  .sheet{ position:fixed; left:0; right:0; bottom:0; z-index:31; background:var(--bg-2);
-    border-top:1px solid var(--line); border-radius:22px 22px 0 0; max-width:520px; margin:0 auto;
-    transform:translateY(100%); transition:transform .28s cubic-bezier(.2,.9,.3,1), max-height .25s ease; max-height:82vh; overflow-y:auto; }
-  .sheet.show{ transform:translateY(0); }
-  .sheet.fullpage{ max-height:95vh; }
-  .sheet-handle{ width:38px; height:4px; background:var(--line); border-radius:99px; margin:10px auto 4px; }
-  .sheet .thumb-big{ width:100%; aspect-ratio:4/3; background:linear-gradient(160deg,#181b2b,#0d0f18);
-    display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
-  .sheet .thumb-big img{ width:100%; height:100%; object-fit:cover; }
-  .sheet .thumb-big.zoomable{ cursor:zoom-in; }
-  .sheet-body{ padding:16px 18px 10px; }
+  /* ===== Product full page ===== */
+  .thumb-big{ width:100%; aspect-ratio:1/1; max-height:44vh; background:linear-gradient(160deg,#181b2b,#0d0f18);
+    display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative;
+    border-radius:16px; margin-top:2px; }
+  .thumb-big img{ width:100%; height:100%; object-fit:cover; }
+  .thumb-big.zoomable{ cursor:zoom-in; }
+  .thumb-big .ph{ font-size:52px; opacity:.35; }
+  .thumb-big .zoom-tag{ position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,.55); color:var(--cloud);
+    font-size:11px; padding:5px 10px; border-radius:9px; backdrop-filter:blur(4px); z-index:2; }
+  .product-body{ padding:16px 2px 110px; }
   .sheet-name{ font-size:18px; font-weight:700; }
   .sheet-badges{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
   .b{ font-size:11px; font-weight:700; padding:5px 10px; border-radius:8px; }
@@ -182,11 +179,24 @@
   .sheet-price{ margin-top:16px; font-family:'Anton',sans-serif; font-size:28px; letter-spacing:.5px;
     background:linear-gradient(180deg, var(--gold-1), var(--gold-2)); -webkit-background-clip:text;
     background-clip:text; color:transparent; }
-  .sheet-buy{ margin-top:16px; width:100%; border:none; border-radius:14px; padding:15px 0; font-size:15px;
-    font-weight:700; color:#06070c; background:linear-gradient(135deg, var(--blue), #8be9ff);
-    box-shadow:0 8px 24px rgba(79,209,255,.3); }
 
-  .co{ padding:18px 18px 6px; text-align:center; }
+  .buybar{ position:fixed; left:0; right:0; bottom:0; z-index:25; max-width:520px; margin:0 auto;
+    background:rgba(11,13,22,.92); backdrop-filter:blur(16px) saturate(150%); -webkit-backdrop-filter:blur(16px) saturate(150%);
+    border-top:1px solid var(--line); padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+    transform:translateY(100%); transition:transform .25s cubic-bezier(.2,.9,.3,1); }
+  .buybar.show{ transform:translateY(0); }
+  .buybar-price{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; padding:0 2px; }
+  .buybar-price .bp-label{ font-size:11px; color:var(--muted); }
+  .buybar-price .bp-val{ font-family:'Anton',sans-serif; font-size:20px; letter-spacing:.5px;
+    background:linear-gradient(180deg, var(--gold-1), var(--gold-2)); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  .buybar button{ width:100%; border:none; border-radius:14px; padding:15px 0; font-size:15px;
+    font-weight:700; color:#06070c; background:linear-gradient(135deg, var(--blue), #8be9ff);
+    box-shadow:0 8px 24px rgba(79,209,255,.3); cursor:pointer; }
+
+  /* ===== Payment full page ===== */
+  .payment-wrap{ padding-bottom:calc(40px + env(safe-area-inset-bottom)); }
+  .co{ padding:6px 4px 0; text-align:center; }
   .co-title{ font-size:16px; font-weight:700; margin-bottom:4px; }
   .co-sub{ font-size:12.5px; color:var(--muted); margin-bottom:14px; }
   .co-qr{ width:220px; height:220px; margin:0 auto 6px; border-radius:16px; overflow:hidden;
@@ -242,7 +252,7 @@
   .guide-video-empty{ margin-top:6px; background:var(--card); border:1px dashed var(--line); border-radius:14px;
     padding:22px 14px; text-align:center; color:var(--muted); font-size:12px; }
 
-  /* Fullscreen image lightbox (zoom) */
+  /* Fullscreen image lightbox (zoom) — used for product photo + QR, not a "page" */
   .lightbox-bg{ position:fixed; inset:0; z-index:60; background:rgba(2,3,6,.94); display:flex; align-items:center; justify-content:center;
     opacity:0; pointer-events:none; transition:opacity .2s; }
   .lightbox-bg.show{ opacity:1; pointer-events:all; }
@@ -336,29 +346,42 @@
       <div class="rules-box" id="rulesBox"></div>
     </div>
 
+    <!-- ===== Product page (full page, not a popup sheet) ===== -->
+    <div class="screen" id="screenProduct">
+      <div class="back-row">
+        <div class="back-btn" id="productBackBtn">←</div>
+        <div class="back-title">ព័ត៌មានទំនិញ</div>
+      </div>
+      <div class="thumb-big" id="pThumb"><div class="ph">🍈</div></div>
+      <div class="product-body">
+        <div class="sheet-name" id="pName"></div>
+        <div class="sheet-badges" id="pBadges"></div>
+        <div class="sheet-desc" id="pDesc"></div>
+        <div class="sheet-price" id="pPrice"></div>
+      </div>
+    </div>
+
+    <!-- ===== Payment page (full page) ===== -->
+    <div class="screen" id="screenPayment">
+      <div class="back-row">
+        <div class="back-btn" id="paymentBackBtn">←</div>
+        <div class="back-title">ការទូទាត់</div>
+      </div>
+      <div class="payment-wrap" id="paymentContent"></div>
+    </div>
+
   </div>
 
-  <nav class="bottomnav">
+  <nav class="bottomnav" id="bottomNav">
     <div class="navitem active" data-screen="home"><span class="ni">🏠</span>ដើម</div>
     <div class="navitem" data-screen="categories"><span class="ni">📦</span>ប្រភេទ</div>
     <div class="navitem" data-screen="orders"><span class="ni">🧾</span>Order</div>
     <div class="navitem" data-screen="profile"><span class="ni">👤</span>គណនី</div>
   </nav>
 
-  <div class="sheet-bg" id="sheetBg"></div>
-  <div class="sheet" id="sheet">
-    <div class="sheet-handle"></div>
-    <div id="sheetDetailStage">
-      <div class="thumb-big" id="sheetThumb"><div class="ph">🍈</div></div>
-      <div class="sheet-body">
-        <div class="sheet-name" id="sheetName"></div>
-        <div class="sheet-badges" id="sheetBadges"></div>
-        <div class="sheet-desc" id="sheetDesc"></div>
-        <div class="sheet-price" id="sheetPrice"></div>
-        <button class="sheet-buy" id="sheetBuy">🛍 ទិញឥឡូវ</button>
-      </div>
-    </div>
-    <div id="sheetCheckoutStage" style="display:none;"></div>
+  <div class="buybar" id="productBuyBar">
+    <div class="buybar-price"><span class="bp-label">តម្លៃសរុប</span><span class="bp-val" id="buyBarPrice"></span></div>
+    <button id="buyBarBtn">🛍 ទិញឥឡូវ</button>
   </div>
 
   <div class="lightbox-bg" id="lightboxBg">
@@ -374,6 +397,8 @@ if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor?.('#06070c'); tg.setBackgro
 let ALL_ITEMS = [];
 let CATEGORIES = [];
 let homeState = { search: '', min: 0, max: 999999 };
+let currentItem = null;
+let cameFrom = 'home';
 const CAT_ICONS = { 'Account':'👤', 'Fruit':'🍈', 'Gamepass':'🎮', 'Evade':'🏃', 'Robux':'💎', 'Blade Ball':'⚔️', 'MM2':'🔪' };
 
 function haptic(){ tg?.HapticFeedback?.impactOccurred('light'); }
@@ -428,16 +453,26 @@ function buildFX(){
   }
 }
 
+// ===== Simple screen router (Home / Categories / Orders / Profile / Product / Payment) =====
+function goToScreen(key){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen' + key.charAt(0).toUpperCase() + key.slice(1)).classList.add('active');
+}
+function setChromeForSubpage(hide){
+  document.getElementById('bottomNav').style.display = hide ? 'none' : '';
+  document.body.classList.toggle('hide-nav', hide);
+}
+
 document.querySelectorAll('.navitem').forEach(nav=>{
   nav.onclick = ()=>{
     haptic();
     document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
     nav.classList.add('active');
-    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     const key = nav.dataset.screen;
-    document.getElementById('screen' + key.charAt(0).toUpperCase() + key.slice(1)).classList.add('active');
+    goToScreen(key);
     if (key === 'categories') renderCatShelf();
     if (key === 'orders') loadMyOrders();
+    window.scrollTo(0,0);
   };
 });
 
@@ -463,7 +498,7 @@ function cardHTML(it){
     <button class="buybtn">ទិញឥឡូវ</button></div>`;
 }
 
-function renderGridInto(container, items){
+function renderGridInto(container, items, from){
   if (items.length === 0){
     container.innerHTML = '<div class="empty"><div class="em">🔍</div>រកមិនឃើញទំនិញទេ</div>';
     return;
@@ -474,7 +509,7 @@ function renderGridInto(container, items){
     card.className = 'card';
     card.style.animationDelay = (idx*0.03)+'s';
     card.innerHTML = cardHTML(it);
-    card.onclick = ()=>openSheet(it);
+    card.onclick = ()=>openProductPage(it, from);
     container.appendChild(card);
   });
 }
@@ -485,7 +520,7 @@ function renderHomeGrid(){
     if (it.price < homeState.min || it.price > homeState.max) return false;
     return true;
   });
-  renderGridInto(document.getElementById('homeGrid'), items);
+  renderGridInto(document.getElementById('homeGrid'), items, 'home');
 }
 
 document.getElementById('searchInput').addEventListener('input', e=>{
@@ -531,7 +566,7 @@ function openCategoryDetail(cat){
   document.getElementById('catDetailView').style.display = '';
   document.getElementById('catDetailTitle').textContent = `${CAT_ICONS[cat]||'📦'} ${cat}`;
   const items = ALL_ITEMS.filter(it=>it.category===cat);
-  renderGridInto(document.getElementById('catDetailGrid'), items);
+  renderGridInto(document.getElementById('catDetailGrid'), items, 'categories');
 }
 document.getElementById('catBackBtn').onclick = ()=>{ haptic(); renderCatShelf(); };
 
@@ -599,56 +634,90 @@ document.getElementById('rulesRow').onclick = async ()=>{
   }
 };
 
-function openSheet(it){
+// ===== Product page (full page) =====
+function openProductPage(it, from){
   haptic();
-  document.getElementById('sheetDetailStage').style.display = '';
-  document.getElementById('sheetCheckoutStage').style.display = 'none';
-  document.getElementById('sheet').classList.remove('fullpage');
-  document.getElementById('sheetName').textContent = it.name;
-  document.getElementById('sheetDesc').textContent = it.description || 'គ្មានពិពណ៌នាបន្ថែម';
-  document.getElementById('sheetPrice').textContent = '$' + it.price;
-  const sheetThumb = document.getElementById('sheetThumb');
+  if (window._pollTimer) clearInterval(window._pollTimer);
+  currentItem = it;
+  cameFrom = from || 'home';
+  document.getElementById('pName').textContent = it.name;
+  document.getElementById('pDesc').textContent = it.description || 'គ្មានពិពណ៌នាបន្ថែម';
+  document.getElementById('pPrice').textContent = '$' + it.price;
+  document.getElementById('buyBarPrice').textContent = '$' + it.price;
+  const thumb = document.getElementById('pThumb');
   if (it.photo_url){
-    sheetThumb.innerHTML = `<img src="${it.photo_url}">`;
-    sheetThumb.classList.add('zoomable');
-    sheetThumb.onclick = ()=> openLightbox(it.photo_url);
+    thumb.innerHTML = `<img src="${it.photo_url}"><div class="zoom-tag">🔍 ពង្រីក</div>`;
+    thumb.classList.add('zoomable');
+    thumb.onclick = ()=> openLightbox(it.photo_url);
   } else {
-    sheetThumb.innerHTML = `<div class="ph">${it.category==='Account'?'👤':'🍈'}</div>`;
-    sheetThumb.classList.remove('zoomable');
-    sheetThumb.onclick = null;
+    thumb.innerHTML = `<div class="ph">${it.category==='Account'?'👤':'🍈'}</div>`;
+    thumb.classList.remove('zoomable');
+    thumb.onclick = null;
   }
-  const badges = document.getElementById('sheetBadges');
+  const badges = document.getElementById('pBadges');
   if (it.category === 'Account') {
     badges.innerHTML = `<div class="b stock">📦 ${it.category}</div><div class="b war">🛡️ Warranty 14ថ្ងៃ</div>`;
   } else {
     badges.innerHTML = `<div class="b stock">📦 ${it.category}</div><div class="b stock">${it.quantity} នៅសល់</div><div class="b war" style="color:var(--gold-1);border-color:rgba(232,199,102,.4);background:rgba(232,199,102,.14)">🔄 Trade Item</div>`;
   }
-  document.getElementById('sheetBuy').onclick = ()=> startCheckout(it);
-  document.getElementById('sheetBg').classList.add('show');
-  document.getElementById('sheet').classList.add('show');
+  goToScreen('product');
+  setChromeForSubpage(true);
+  document.getElementById('productBuyBar').classList.add('show');
+  window.scrollTo(0,0);
 }
-document.getElementById('sheetBg').onclick = closeSheet;
-function closeSheet(){
-  document.getElementById('sheetBg').classList.remove('show');
-  document.getElementById('sheet').classList.remove('show');
-  document.getElementById('sheet').classList.remove('fullpage');
+
+document.getElementById('productBackBtn').onclick = ()=>{
+  haptic();
+  document.getElementById('productBuyBar').classList.remove('show');
+  setChromeForSubpage(false);
+  goToScreen(cameFrom);
+  window.scrollTo(0,0);
+};
+
+document.getElementById('buyBarBtn').onclick = ()=>{
+  if (currentItem) openPaymentPage(currentItem);
+};
+
+// ===== Payment page (full page) =====
+function openPaymentPage(it){
+  haptic();
+  document.getElementById('productBuyBar').classList.remove('show');
+  goToScreen('payment');
+  setChromeForSubpage(true);
+  window.scrollTo(0,0);
+  startCheckout(it);
+}
+
+document.getElementById('paymentBackBtn').onclick = ()=>{
+  haptic();
   if (window._pollTimer) clearInterval(window._pollTimer);
+  goToScreen('product');
+  document.getElementById('productBuyBar').classList.add('show');
+  window.scrollTo(0,0);
+};
+
+function finishOrder(){
+  if (window._pollTimer) clearInterval(window._pollTimer);
+  setChromeForSubpage(false);
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
+  document.querySelector('.navitem[data-screen="home"]').classList.add('active');
+  goToScreen('home');
+  loadItems();
+  window.scrollTo(0,0);
 }
 
 function coStage(html){
-  document.getElementById('sheetDetailStage').style.display = 'none';
-  document.getElementById('sheet').classList.add('fullpage');
-  const stage = document.getElementById('sheetCheckoutStage');
-  stage.style.display = ''; stage.innerHTML = html;
+  document.getElementById('paymentContent').innerHTML = html;
+  window.scrollTo(0,0);
 }
 
 async function startCheckout(it){
-  haptic();
   const initData = tg?.initData;
   if (!initData){
     const botUsername = document.body.dataset.bot;
     const url = `https://t.me/${botUsername}?start=buy_${it.id}`;
     if (tg?.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
+    document.getElementById('paymentBackBtn').click();
     return;
   }
   coStage(`<div class="co"><div class="co-spin"></div><div class="co-sub">កំពុងរៀបចំការទូទាត់...</div></div>`);
@@ -658,8 +727,10 @@ async function startCheckout(it){
     quote = await res.json();
     if (!res.ok) throw new Error(quote.error || 'failed');
   }catch(e){
-    return coStage(`<div class="co"><div class="co-title">⚠️ មានបញ្ហា</div><div class="co-sub">សូមទាក់ទងម្ចាស់ហាងផ្ទាល់</div>
-      <button class="co-btn ghost" onclick="openSheet(${JSON.stringify(it).replace(/"/g,'&quot;')})">ត្រឡប់ក្រោយ</button></div>`);
+    coStage(`<div class="co"><div class="co-title">⚠️ មានបញ្ហា</div><div class="co-sub">សូមទាក់ទងម្ចាស់ហាងផ្ទាល់</div>
+      <button class="co-btn ghost" id="quoteErrBackBtn">ត្រឡប់ក្រោយ</button></div>`);
+    document.getElementById('quoteErrBackBtn').onclick = ()=> document.getElementById('paymentBackBtn').click();
+    return;
   }
   renderPaymentStage(it, quote, initData);
 }
@@ -725,7 +796,7 @@ function renderPaymentStage(it, quote, initData){
       submitBtn.disabled = false; haptic();
     }
   };
-  document.getElementById('cancelCheckoutBtn').onclick = ()=> openSheet(it);
+  document.getElementById('cancelCheckoutBtn').onclick = ()=> document.getElementById('paymentBackBtn').click();
   submitBtn.onclick = async ()=>{
     haptic(); submitBtn.disabled = true; submitBtn.textContent = '⏳ កំពុងផ្ញើ...';
     const fd = new FormData();
@@ -789,8 +860,9 @@ function renderApprovedStage(data, initData){
           ${videoUrl ? `<video class="guide-video" controls playsinline src="${videoUrl}"></video>` : `<div class="guide-video-empty">📹 វីដេអូនឹងបន្ថែមឆាប់ៗនេះ</div>`}
         </div>`
         : `<div class="co-note">ម្ចាស់ហាងនឹងផ្ញើព័ត៌មានឲ្យអ្នកឆាប់ៗនេះតាម Telegram Chat</div>`}
-      <button class="co-btn primary" onclick="closeSheet()">✅ រួចរាល់</button>
+      <button class="co-btn primary" id="finishOrderBtn">✅ រួចរាល់</button>
     </div>`);
+  document.getElementById('finishOrderBtn').onclick = finishOrder;
   if (hasInfo){
     document.getElementById('copyDeliveryBtn').onclick = ()=>{
       navigator.clipboard.writeText(document.getElementById('deliveryText').innerText);
