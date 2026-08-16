@@ -2,6 +2,7 @@ import os
 import uuid
 import random
 from datetime import datetime, timedelta
+from premium_emoji import entities_for
 
 MEDIA_DIR = "media"
 
