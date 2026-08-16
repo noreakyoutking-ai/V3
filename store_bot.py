@@ -6,7 +6,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 import database as db
 from config import (STORE_BOT_TOKEN, ADMIN_BOT_TOKEN, CATEGORIES, STORE_NAME, CURRENCY,
                      ADMIN_CONTACT_USERNAME, CREATOR_NAME, CREATOR_YOUTUBE, WEBAPP_URL)
-from utils import format_price, save_telegram_photo, warranty_status, generate_khqr_image, pick_weighted_spin
+from utils import (format_price, save_telegram_photo, warranty_status, generate_khqr_image,
+                    pick_weighted_spin, get_totp_code)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ TEXTS = {
                   "5️⃣ រង់ចាំ Admin អនុម័ត → ទទួលទំនិញ!"),
         "help_cmds": ("🎮 ជំនួយបន្ថែម:\n"
                       "/codes 🎁 Code | /tierlist 🍈 Tier | /guide 📺 Video\n"
-                      "/rules 📜 វិធាន | /myorders 🧾 Order របស់ខ្ញុំ | /language 🌐 ភាសា"),
+                      "/rules 📜 វិធាន | /myorders 🧾 Order របស់ខ្ញុំ | /getcode 🔐 លេខ 2FA | /language 🌐 ភាសា"),
         "pick": "👇 សូមជ្រើសរើសប្រភេទ ដើម្បីទិញ:",
     },
     "en": {
@@ -54,7 +55,7 @@ TEXTS = {
                   "5️⃣ Wait for admin approval → get your item!"),
         "help_cmds": ("🎮 More help:\n"
                       "/codes 🎁 Codes | /tierlist 🍈 Tier list | /guide 📺 Videos\n"
-                      "/rules 📜 Rules | /myorders 🧾 My orders | /language 🌐 Language"),
+                      "/rules 📜 Rules | /myorders 🧾 My orders | /getcode 🔐 2FA code | /language 🌐 Language"),
         "pick": "👇 Pick a category to buy:",
     },
 }
@@ -111,6 +112,25 @@ async def myorders_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 line += f"\n   {w}"
         lines.append(line)
     await update.message.reply_text("\n".join(lines))
+
+
+async def getcode_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/getcode <order_id> - refresh the live 2FA code for an approved Account order,
+    for whenever the buyer's own authenticator app isn't handy yet."""
+    if not context.args or not context.args[0].isdigit():
+        return await update.message.reply_text("ប្រើ: /getcode <order_id> (លេខ Order របស់អ្នក, មើលបានតាម /myorders)")
+    order_id = int(context.args[0])
+    order = db.get_order(order_id)
+    if not order or order["buyer_chat_id"] != update.effective_user.id or order["status"] != "approved":
+        return await update.message.reply_text("រកមិនឃើញ Order នេះ ឬ Order នេះមិនទាន់អនុម័តទេ។")
+    item = db.get_item(order["item_id"])
+    secret = item["totp_secret"] if item and "totp_secret" in item.keys() else ""
+    if not secret:
+        return await update.message.reply_text("គណនីនេះមិនប្រើ Authenticator 2FA ទេ។")
+    code = get_totp_code(secret)
+    if not code:
+        return await update.message.reply_text("មិនអាចបង្កើត Code បានទេ។ សូមទាក់ទងម្ចាស់ហាង។")
+    await update.message.reply_text(f"⏱ លេខ 2FA បច្ចុប្បន្ន: `{code}`\n(ប្តូរជារៀងរាល់ 30វិនាទី — ចម្លងលឿនៗ)", parse_mode="Markdown")
 
 
 async def shop_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -378,6 +398,7 @@ def build_app():
     app.add_handler(CommandHandler("shop", shop_cmd))
     app.add_handler(CommandHandler("language", language_cmd))
     app.add_handler(CommandHandler("myorders", myorders_cmd))
+    app.add_handler(CommandHandler("getcode", getcode_cmd))
     app.add_handler(CommandHandler("spin", spin_cmd))
     app.add_handler(CommandHandler("applycoupon", applycoupon_cmd))
     app.add_handler(CommandHandler("support", support_cmd))
