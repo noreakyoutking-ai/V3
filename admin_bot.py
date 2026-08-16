@@ -6,6 +6,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 import database as db
 from config import ADMIN_BOT_TOKEN, STORE_BOT_TOKEN, CATEGORIES, CURRENCY, WEBAPP_URL
 from utils import format_price, save_telegram_photo, build_delivery_message, get_totp_code
+from premium_emoji import entities_for
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -785,7 +786,7 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ Order អនុម័តរួច: {orders.get('approved', 0)}\n"
         f"❌ Order បដិសេធ: {orders.get('rejected', 0)}"
     )
-    await update.message.reply_text(text)
+    await update.message.reply_text(text, entities=entities_for(text))
 
 
 async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
