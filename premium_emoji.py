@@ -1,4 +1,5 @@
 """
+from premium_emoji import entities_for
 Shared helper for sending Telegram Premium (custom) emoji inside bot messages.
 
 Usage:
