@@ -31,7 +31,7 @@
     padding:8px 10px; font-size:13px; font-family:inherit; width:100%; }
   .field{ margin-bottom:10px; }
   .field label{ font-size:11px; color:var(--muted); display:block; margin-bottom:4px; }
-  .inline-edit{ display:flex; gap:6px; align-items:center; margin-top:8px; }
+  .inline-edit{ display:flex; gap:6px; align-items:center; margin-top:8px; flex-wrap:wrap; }
   .inline-edit input{ width:70px; text-align:center; }
   .btn{ border:none; border-radius:10px; padding:8px 14px; font-size:12px; font-weight:700; cursor:pointer; }
   .btn.primary{ color:#06070c; background:linear-gradient(135deg, var(--blue), #8be9ff); }
@@ -42,6 +42,7 @@
   .badge{ font-size:10px; font-weight:700; padding:3px 8px; border-radius:7px; }
   .badge.on{ background:rgba(53,214,138,.15); color:var(--warranty); }
   .badge.off{ background:rgba(255,92,108,.15); color:var(--danger); }
+  .badge.totp{ background:rgba(79,209,255,.15); color:var(--blue); }
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .msg{ text-align:center; padding:40px 10px; color:var(--muted); font-size:13px; }
   .thumb-sm{ width:44px; height:44px; border-radius:8px; object-fit:cover; background:#0b0d16; flex-shrink:0; }
@@ -72,6 +73,7 @@
       </div>
       <div class="field"><label>ពិពណ៌នា</label><textarea id="f_description" rows="2"></textarea></div>
       <div class="field"><label>ព័ត៌មានប្រគល់ជូន (Login/Password)</label><textarea id="f_delivery" rows="2"></textarea></div>
+      <div class="field"><label>🔐 Authenticator Secret Key (2FA setup key — ទុកទទេ បើគណនីមិនប្រើ 2FA)</label><input id="f_totp" placeholder="ឧ. JBSWY3DPEHPK3PXP"></div>
       <div class="field"><label>Warranty (ថ្ងៃ, Account=14, ផ្សេង=0)</label><input id="f_warranty" type="number" value="0"></div>
       <div class="field"><label>រូបភាព</label><input id="f_photo" type="file" accept="image/*"></div>
       <button class="btn gold" id="submitAddBtn" style="width:100%;">✅ រក្សាទុក</button>
@@ -125,10 +127,11 @@ async function loadItems(){
   data.items.forEach(it=>{
     const el = document.createElement('div');
     el.className = 'card';
+    const totpBadge = it.totp_secret ? '<span class="badge totp">🔐 2FA</span>' : '';
     el.innerHTML = `
       <div class="row">
         ${it.photo_url ? `<img class="thumb-sm" src="${it.photo_url}">` : `<div class="thumb-sm"></div>`}
-        <div class="name">#${it.id} ${it.name}<div class="meta">${it.category} · ${it.active && it.quantity>0 ? '<span class="badge on">Active</span>' : '<span class="badge off">Inactive</span>'}</div></div>
+        <div class="name">#${it.id} ${it.name}<div class="meta">${it.category} · ${it.active && it.quantity>0 ? '<span class="badge on">Active</span>' : '<span class="badge off">Inactive</span>'} ${totpBadge}</div></div>
       </div>
       <div class="inline-edit">
         <label style="font-size:11px;color:var(--muted);">$</label>
@@ -136,12 +139,14 @@ async function loadItems(){
         <label style="font-size:11px;color:var(--muted);">Stock</label>
         <input type="number" value="${it.quantity}" data-field="quantity" data-id="${it.id}">
         <button class="btn primary small saveBtn" data-id="${it.id}">Save</button>
+        <button class="btn ghost small totpBtn" data-id="${it.id}" data-current="${it.totp_secret ? it.totp_secret.replace(/"/g,'&quot;') : ''}">🔐 Edit 2FA</button>
         <button class="btn danger small delBtn" data-id="${it.id}">Del</button>
       </div>`;
     box.appendChild(el);
   });
   box.querySelectorAll('.saveBtn').forEach(b=>b.onclick = ()=> saveItem(b.dataset.id));
   box.querySelectorAll('.delBtn').forEach(b=>b.onclick = ()=> deleteItem(b.dataset.id));
+  box.querySelectorAll('.totpBtn').forEach(b=>b.onclick = ()=> editTotp(b.dataset.id, b.dataset.current));
 }
 
 async function saveItem(id){
@@ -151,6 +156,17 @@ async function saveItem(id){
   fd.append('init_data', initData);
   fd.append('price', price);
   fd.append('quantity', quantity);
+  const res = await fetch(`/api/admin/items/${id}`, {method:'PATCH', body: fd});
+  if (res.ok){ tg?.HapticFeedback?.notificationOccurred('success'); loadItems(); }
+  else alert('មានបញ្ហា');
+}
+
+async function editTotp(id, current){
+  const secret = prompt('🔐 Authenticator Secret Key (2FA setup key) — ទុកទទេ ដើម្បីលុប:', current || '');
+  if (secret === null) return; // cancelled
+  const fd = new FormData();
+  fd.append('init_data', initData);
+  fd.append('totp_secret', secret.trim() || '-'); // '-' signals "clear it" to the backend
   const res = await fetch(`/api/admin/items/${id}`, {method:'PATCH', body: fd});
   if (res.ok){ tg?.HapticFeedback?.notificationOccurred('success'); loadItems(); }
   else alert('មានបញ្ហា');
@@ -171,6 +187,7 @@ document.getElementById('submitAddBtn').onclick = async ()=>{
   fd.append('quantity', document.getElementById('f_quantity').value);
   fd.append('description', document.getElementById('f_description').value);
   fd.append('delivery_info', document.getElementById('f_delivery').value);
+  fd.append('totp_secret', document.getElementById('f_totp').value.trim());
   fd.append('warranty_days', document.getElementById('f_warranty').value);
   const photo = document.getElementById('f_photo').files[0];
   if (photo) fd.append('photo', photo);
