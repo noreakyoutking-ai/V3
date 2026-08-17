@@ -1,1192 +1,903 @@
-<!doctype html>
-<html lang="km">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Uchiro Store</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&family=Noto+Sans+Khmer:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-  /* ============================================================
-     UCHIRO — "NEON HOT PRODUCTS" theme
-     Deep violet-black backdrop with purple + cyan glow, a tilted
-     3D "Hot Products" carousel up top (new, additive), and the
-     rest of the app recolored to match. Every original element
-     ID/class + all app logic is unchanged — only the look, plus
-     one new self-contained carousel section/script.
-     ============================================================ */
-  :root{
-    --bg:#08040f; --bg-2:#0c0620; --card:#0e0a1c; --line:rgba(168,120,255,.20);
-    --gold-1:#2fe6cf; --gold-2:#17b7a6; --gold-3:#0b6d64; --blue:#c7b8ff;
-    --cloud:#f5f2fb; --muted:#8d84ab; --warranty:#34d399; --danger:#ff5a5a; --radius:20px;
-    --ink:#080314;
-    --coral-1:#a855f7; --coral-2:#7c3aed;
-  }
-  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0; padding:0; background:var(--bg); color:var(--cloud);
-    font-family:'Manrope','Noto Sans Khmer',sans-serif; overflow-x:hidden;}
-  body{ padding-bottom:calc(88px + env(safe-area-inset-bottom)); padding-top:env(safe-area-inset-top);
-    opacity:0; animation:appIn .5s ease forwards; }
-  body.hide-nav{ padding-bottom:env(safe-area-inset-bottom); }
-  @keyframes appIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
-  ::selection{ background:var(--coral-1); color:#fff; }
+import os
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, WebAppInfo
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
-  .fx{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
-  .glow{ position:absolute; width:90vw; height:90vw; left:-30vw; top:-40vw;
-    background:radial-gradient(circle, rgba(139,60,246,.30) 0%, rgba(139,60,246,0) 62%); }
-  .glow-bottom{ position:absolute; width:90vw; height:90vw; right:-30vw; bottom:-30vw;
-    background:radial-gradient(circle, rgba(34,211,238,.16) 0%, rgba(34,211,238,0) 65%); }
+import database as db
+from config import ADMIN_BOT_TOKEN, STORE_BOT_TOKEN, CATEGORIES, CURRENCY, WEBAPP_URL
+from utils import format_price, save_telegram_photo, build_delivery_message, get_totp_code
+from premium_emoji import entities_for
 
-  .wrap{ position:relative; z-index:1; max-width:520px; margin:0 auto; padding:0 14px; min-height:100vh; }
-  .screen{ display:none; animation:screenIn .3s ease; }
-  .screen.active{ display:block; }
-  @keyframes screenIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-  header{ padding:22px 0 8px; text-align:center; }
-  .logo-ring{ width:70px; height:70px; margin:0 auto 12px; border-radius:50%; padding:2px;
-    background:conic-gradient(from 0deg, var(--coral-1), var(--gold-1), var(--coral-2), var(--coral-1)); animation:spin-slow 14s linear infinite; }
-  @keyframes spin-slow{ to{ transform:rotate(360deg); } }
-  .logo-ring-inner{ width:100%; height:100%; border-radius:50%; background:var(--bg); display:flex;
-    align-items:center; justify-content:center; overflow:hidden; border:1px solid rgba(168,120,255,.3); }
-  .logo-ring-inner img{ width:100%; height:100%; object-fit:cover; }
-  .logo-ring-inner .fallback{ font-size:24px; }
-  .logo-word{ font-family:'Manrope',sans-serif; letter-spacing:1px; font-size:25px; line-height:1; font-weight:800;
-    background:linear-gradient(90deg, var(--cloud), var(--coral-1));
-    -webkit-background-clip:text; background-clip:text; color:transparent; }
-  .logo-sub{ font-size:10px; letter-spacing:4px; color:var(--muted); margin-top:6px; font-weight:600; text-transform:uppercase; }
-  .badgerow{ display:flex; align-items:center; justify-content:center; gap:8px; margin-top:14px; flex-wrap:wrap; }
-  .trust{ display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border:1px solid rgba(52,211,153,.3);
-    background:rgba(52,211,153,.07); border-radius:999px; font-size:11.5px; color:var(--warranty); font-weight:600; }
-  .live-dot{ width:6px; height:6px; border-radius:50%; background:var(--warranty); animation:blink 1.6s ease-in-out infinite; }
-  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
+EDITABLE_FIELDS = ["name", "price", "description", "quantity", "delivery_info", "photo", "active", "warranty_days", "published"]
+STOCK_CATEGORIES = [c for c in CATEGORIES if c != "Account"]
 
-  /* ===== NEW: Hot Products hero carousel (additive, self-contained) ===== */
-  .hot-wrap{ padding-top:6px; margin-bottom:6px; }
-  .hot-eyebrow{ display:flex; justify-content:center; margin-bottom:10px; }
-  .hot-eyebrow span{ display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:999px;
-    background:rgba(168,85,247,.14); border:1px solid rgba(168,85,247,.4); color:#d9c2ff; font-size:11px; font-weight:700; }
-  .hot-title{ text-align:center; font-size:23px; font-weight:800; letter-spacing:.2px; margin:0 0 16px; color:var(--cloud); }
-  .hot-title b{ font-weight:800; background:linear-gradient(90deg, var(--coral-1), #ec4899);
-    -webkit-background-clip:text; background-clip:text; color:transparent; }
-  .hot-stage{ position:relative; height:300px; perspective:1000px; overflow:visible; }
-  .hot-track{ position:absolute; inset:0; display:flex; align-items:center; gap:14px; overflow-x:auto;
-    scroll-snap-type:x mandatory; scrollbar-width:none; padding:0 30%; }
-  .hot-track::-webkit-scrollbar{ display:none; }
-  .hot-card{ flex:0 0 62%; max-width:230px; scroll-snap-align:center; height:270px; border-radius:22px;
-    background:linear-gradient(180deg, var(--card), #070511); border:1px solid var(--line); overflow:hidden;
-    display:flex; flex-direction:column; box-shadow:0 20px 40px rgba(0,0,0,.55);
-    transition:transform .12s linear, opacity .12s linear; will-change:transform; cursor:pointer; }
-  .hot-thumb{ flex:1; background-size:cover; background-position:center; position:relative;
-    display:flex; align-items:center; justify-content:center; }
-  .hot-thumb .hot-ph{ width:56px; height:56px; border-radius:16px; background:rgba(255,255,255,.08);
-    display:flex; align-items:center; justify-content:center; font-size:26px; }
-  .hot-badge{ position:absolute; top:10px; left:10px; display:inline-flex; align-items:center; gap:4px;
-    background:rgba(8,4,15,.55); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.18);
-    color:#fff; font-size:9.5px; font-weight:700; padding:4px 9px; border-radius:999px; }
-  .hot-body{ padding:12px 14px 14px; background:#0a0714; }
-  .hot-name{ font-size:13.5px; font-weight:700; color:var(--cloud); line-height:1.3;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .hot-price{ margin-top:4px; font-size:16px; font-weight:800; color:var(--gold-1); }
-  .hot-nav{ display:flex; justify-content:center; gap:12px; margin-top:14px; }
-  .hot-nav button{ width:38px; height:38px; border-radius:50%; border:1px solid var(--line);
-    background:rgba(255,255,255,.04); color:var(--cloud); font-size:16px; cursor:pointer;
-    display:flex; align-items:center; justify-content:center; }
-  .hot-nav button:active{ transform:scale(.92); background:rgba(168,85,247,.18); }
-  .hot-empty{ text-align:center; color:var(--muted); font-size:12.5px; padding:40px 0; }
+DEFAULT_RULES = (
+    "📜 វិធាន និង Warranty\n\n"
+    "🍎 Fruit / 🎮 Gamepass / ទំនិញផ្សេងទៀត (Trade ក្នុងហ្គេម):\n"
+    "ការទិញជា Trade ភ្លាមៗក្នុងហ្គេម — ពេលទទួលរួច មិនអាចដូរ ឬសងប្រាក់វិញបានទេ សូមពិនិត្យមុនទទួល។\n\n"
+    "📦 Account — Warranty 14ថ្ងៃ (Standard):\n"
+    "- បើអ្នកទិញលុប Authenticator App ចោល → Warranty កាត់មកនៅត្រឹម 7ថ្ងៃប៉ុណ្ណោះ\n"
+    "- ការសង/ដូរ Account សងតែក្នុងករណី Roblox Support ដកហូត Account មកវិញ (Owner ដើម Revert) ប៉ុណ្ណោះ\n"
+    "- បើអ្នកទិញលុប Email សង្គ្រោះ ឬ Code Authenticator App ចោលទាំងអស់ → គ្មាន Warranty ឬសងប្រាក់វិញក្នុងករណីណាមួយឡើយ"
+)
 
-  .page-title{ font-family:'Manrope',sans-serif; letter-spacing:.2px; font-size:19px; padding:20px 0 4px; font-weight:800;
-    color:var(--cloud); }
-  .page-sub{ color:var(--muted); font-size:12px; margin-bottom:14px; }
-  .back-row{ display:flex; align-items:center; gap:10px; padding:18px 0 4px; }
-  .back-btn{ width:34px; height:34px; border-radius:10px; background:var(--card); border:1px solid var(--line);
-    display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--cloud); flex-shrink:0; }
-  .back-title{ font-size:15px; font-weight:800; font-family:'Manrope',sans-serif; color:var(--cloud); }
 
-  .searchbar{ display:flex; gap:8px; margin-top:14px; }
-  .search{ flex:1; display:flex; align-items:center; gap:8px; background:var(--card);
-    border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
-  .search input{ background:none; border:none; outline:none; color:var(--cloud); font-size:14px; width:100%; font-family:inherit; }
-  .search input::placeholder{ color:var(--muted); }
-  .search svg{ flex-shrink:0; opacity:.6; }
+def is_admin(update: Update) -> bool:
+    return update.effective_user and db.is_admin_id(update.effective_user.id)
 
-  .pricerow{ display:flex; gap:8px; overflow-x:auto; margin-top:11px; scrollbar-width:none; }
-  .pricerow::-webkit-scrollbar{ display:none; }
-  .pill{ flex-shrink:0; padding:7px 14px; border-radius:999px; background:transparent; border:1px solid var(--line);
-    color:var(--muted); font-size:11.5px; font-weight:600; cursor:pointer; }
-  .pill.active{ border-color:var(--coral-1); color:#e9d8ff; background:rgba(168,85,247,.14); }
 
-  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px; }
-  .card{ background:linear-gradient(180deg, var(--card), #08051200); border:1px solid var(--line); border-radius:var(--radius);
-    overflow:hidden; position:relative; opacity:0; transform:translateY(8px); animation:rise .4s ease forwards; cursor:pointer;
-    transition:transform .15s ease, border-color .15s ease; box-shadow:0 10px 22px rgba(0,0,0,.3); }
-  .card:active{ transform:scale(.97); border-color:rgba(168,85,247,.55); }
-  @keyframes rise{ to{ opacity:1; transform:translateY(0); } }
-  .card .thumb{ width:100%; aspect-ratio:1/1; background:linear-gradient(160deg,#140d26,#08051a); position:relative;
-    display:flex; align-items:center; justify-content:center; overflow:hidden; }
-  .card .thumb img{ width:100%; height:100%; object-fit:cover; }
-  .card .thumb .ph{ font-size:32px; opacity:.3; }
-  .badge-war{ position:absolute; top:8px; left:8px; background:rgba(52,211,153,.16); border:1px solid rgba(52,211,153,.45);
-    color:var(--warranty); font-size:9.5px; font-weight:700; padding:4px 8px; border-radius:8px; z-index:2; }
-  .badge-trade{ position:absolute; top:8px; left:8px; background:rgba(168,85,247,.18); border:1px solid rgba(168,85,247,.5);
-    color:#e6d4ff; font-size:9.5px; font-weight:700; padding:4px 8px; border-radius:8px; z-index:2; }
-  .badge-stock{ position:absolute; top:8px; right:8px; background:rgba(0,0,0,.55); color:var(--muted); font-size:9.5px;
-    font-weight:600; padding:4px 7px; border-radius:8px; z-index:2; }
-  .badge-new{ position:absolute; bottom:8px; left:8px; background:rgba(236,72,153,.16); border:1px solid rgba(236,72,153,.5);
-    color:#ff9fce; font-size:9.5px; font-weight:700; padding:4px 8px; border-radius:8px; z-index:2; }
-  .card .info{ padding:11px 12px 12px; }
-  .card .name{ font-size:12.5px; font-weight:600; color:var(--cloud); line-height:1.3;
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:32px; }
-  .card .price{ margin-top:6px; font-family:'Manrope',sans-serif; font-weight:800; font-size:16px; letter-spacing:.2px;
-    color:var(--gold-1); }
-  .card .buybtn{ margin-top:9px; width:100%; border:none; border-radius:999px; padding:9px 0; font-size:11.5px;
-    font-weight:700; letter-spacing:.2px; color:#fff;
-    background:linear-gradient(135deg, var(--coral-1), var(--coral-2)); }
+def is_owner(update: Update) -> bool:
+    from config import OWNER_IDS
+    return update.effective_user and update.effective_user.id in OWNER_IDS
 
-  .empty{ text-align:center; padding:52px 12px; color:var(--muted); font-size:13px; }
-  .empty .em{ font-size:32px; margin-bottom:10px; opacity:.7; }
-  .grid .empty{ grid-column:1/-1; }
 
-  .skeleton-card{ background:var(--card); border-radius:var(--radius); overflow:hidden; border:1px solid var(--line); }
-  .skeleton-thumb{ width:100%; aspect-ratio:1/1; background:linear-gradient(100deg, #140d26 30%, #201735 50%, #140d26 70%);
-    background-size:200% 100%; animation:shimmer 1.4s ease-in-out infinite; }
-  .skeleton-line{ height:10px; margin:10px 11px; border-radius:6px;
-    background:linear-gradient(100deg, #140d26 30%, #201735 50%, #140d26 70%);
-    background-size:200% 100%; animation:shimmer 1.4s ease-in-out infinite; }
-  .skeleton-line.short{ width:60%; }
-  @keyframes shimmer{ 0%{ background-position:200% 0;} 100%{ background-position:-200% 0;} }
+async def deny(update: Update):
+    if update.callback_query:
+        await update.callback_query.answer("អ្នកមិនមែនជា Admin ទេ", show_alert=True)
+    else:
+        await update.message.reply_text("អ្នកមិនមែនជា Admin ទេ។")
 
-  .catgrid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
-  .catcard{ background:var(--card); border:1px solid var(--line); border-radius:16px;
-    padding:20px 14px; text-align:center; cursor:pointer; transition:transform .15s, border-color .15s; }
-  .catcard:active{ transform:scale(.96); border-color:rgba(168,85,247,.5); }
-  .catcard .ci{ font-size:22px; margin-bottom:8px; opacity:.95; width:44px; height:44px; line-height:44px; margin-inline:auto;
-    border-radius:50%; background:radial-gradient(circle at 35% 30%, #1c1236, #0a0714); border:1px solid var(--line); }
-  .catcard .cn{ font-size:12.5px; font-weight:700; font-family:'Manrope',sans-serif; }
-  .catcard .cc{ font-size:11px; color:var(--muted); margin-top:3px; }
 
-  .order-card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-top:10px; }
-  .order-top{ display:flex; justify-content:space-between; align-items:center; }
-  .order-name{ font-size:13.5px; font-weight:700; }
-  .order-status{ font-size:10.5px; font-weight:700; padding:4px 9px; border-radius:8px; }
-  .order-status.pending{ background:rgba(168,85,247,.16); color:#e2cbff; }
-  .order-status.approved{ background:rgba(52,211,153,.16); color:var(--warranty); }
-  .order-status.rejected{ background:rgba(255,90,90,.16); color:var(--danger); }
-  .order-meta{ font-size:11px; color:var(--muted); margin-top:6px; }
-  .order-warranty{ font-size:11.5px; color:var(--warranty); margin-top:6px; font-weight:600; }
+def caption_of(item, item_id=None):
+    header = f"🆔 #{item_id}\n" if item_id else ""
+    return (f"{header}📦 {item['category']} — {item['name']}\n"
+            f"💵 {format_price(item['price'], CURRENCY)}\n📝 {item['description']}\n📊 ស្តុក: {item['quantity']}")
 
-  .prow{ display:flex; align-items:center; justify-content:space-between; background:var(--card); border:1px solid var(--line);
-    border-radius:16px; padding:14px 16px; margin-top:10px; cursor:pointer; }
-  .prow .pl{ display:flex; align-items:center; gap:10px; font-size:13.5px; font-weight:600; }
-  .prow .pv{ font-size:12px; color:var(--muted); }
-  .toggle{ width:40px; height:22px; border-radius:99px; background:var(--line); position:relative; transition:.2s; flex-shrink:0; }
-  .toggle.on{ background:linear-gradient(135deg, var(--coral-1), var(--coral-2)); }
-  .toggle::after{ content:''; position:absolute; width:16px; height:16px; border-radius:50%; background:#fff; top:3px; left:3px; transition:.2s; }
-  .toggle.on::after{ transform:translateX(18px); }
-  .rules-box{ margin-top:14px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px;
-    font-size:12.5px; line-height:1.7; color:var(--muted); white-space:pre-wrap; display:none; }
-  .rules-box.show{ display:block; }
 
-  .bottomnav{ position:fixed; left:14px; right:14px; bottom:calc(10px + env(safe-area-inset-bottom)); z-index:20;
-    max-width:492px; margin:0 auto; background:rgba(10,6,20,.92);
-    backdrop-filter:blur(16px) saturate(140%); -webkit-backdrop-filter:blur(16px) saturate(140%);
-    border:1px solid var(--line); border-radius:18px; display:flex; padding:6px;
-    box-shadow:0 12px 30px rgba(0,0,0,.55); }
-  .navitem{ flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 0; cursor:pointer;
-    color:var(--muted); font-size:9.5px; font-weight:600; border-radius:12px; transition:.15s; position:relative; }
-  .navitem .ni{ font-size:17px; opacity:.7; }
-  .navitem.active{ color:#e9d8ff; background:rgba(168,85,247,.14); }
-  .navitem.active .ni{ opacity:1; }
-  .navitem:active{ transform:scale(.93); }
+# ---- start / help ----
 
-  /* ===== Product full page ===== */
-  .thumb-big{ width:100%; aspect-ratio:1/1; max-height:42vh; background:linear-gradient(160deg,#140d26,#08051a);
-    display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative;
-    border-radius:18px; margin-top:2px; border:1px solid var(--line); }
-  .thumb-big img{ width:100%; height:100%; object-fit:cover; }
-  .thumb-big.zoomable{ cursor:zoom-in; }
-  .thumb-big .ph{ font-size:48px; opacity:.3; }
-  .thumb-big .zoom-tag{ position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,.55); color:var(--cloud);
-    font-size:10.5px; padding:5px 11px; border-radius:999px; border:1px solid rgba(255,255,255,.2); z-index:2; }
-  .product-body{ padding:18px 2px 120px; }
-  .sheet-name{ font-size:18px; font-weight:800; font-family:'Manrope',sans-serif; }
-  .sheet-badges{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
-  .b{ font-size:10.5px; font-weight:700; padding:6px 11px; border-radius:8px; }
-  .b.war{ background:rgba(52,211,153,.14); color:var(--warranty); border:1px solid rgba(52,211,153,.4); }
-  .b.stock{ background:rgba(168,85,247,.12); color:#d9c2ff; border:1px solid rgba(168,85,247,.35); }
-  .sheet-desc{ margin-top:14px; font-size:13px; line-height:1.65; color:var(--muted); white-space:pre-wrap; }
-  .sheet-price{ margin-top:20px; font-family:'Manrope',sans-serif; font-weight:800; font-size:27px; letter-spacing:.2px;
-    color:var(--gold-1); }
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    text = ("👋 Uchiro Store — Admin Bot\n\n"
+            "📦 Account (មានរូបភាព):\n/additem - បន្ថែម Account ម្តងមួយ\n\n"
+            "⚡ Fruit/Gamepass/Evade/Robux/Blade Ball/MM2 (លឿន បន្ថែមច្រើនម្តងតែម្តង):\n"
+            "/addstock - ជ្រើសរើសប្រភេទ រួចបន្ថែមច្រើនក្នុងម្តង\n"
+            "/addfruit - បន្ថែម Fruit ច្រើនក្នុងម្តង (Shortcut)\n/addgamepass - បន្ថែម Gamepass ច្រើនក្នុងម្តង (Shortcut)\n"
+            "/setstock <id> <ចំនួន> - កែស្តុកលឿន\n/setprice <id> <តម្លៃ> - កែតម្លៃលឿន\n\n"
+            "🎮 ជួយ Player (ទាក់ទាញអ្នកលេងចូល Bot):\n"
+            "/setcodes - Update Redeem Code ថ្មី\n/settierlist - Update Fruit Tier List\n"
+            "/addguide - បន្ថែម Video Guide\n/removeguide <id> - លុប Guide\n/guides - មើល Guide ទាំងអស់\n\n"
+            "📜 វិធាន:\n/setrules - កែវិធាន/Warranty\n\n"
+            "🏷️ Coupon:\n/addcoupon <code> <percent|fixed> <amount> <max_uses>\n"
+            "/listcoupons - មើល Coupon ទាំងអស់\n/disablecoupon <code> - បិទ Coupon\n\n"
+            "📤 Draft/Release (ទំនិញថ្មីមិនបង្ហាញភ្លាមទេ):\n"
+            "/drafts - មើលទំនិញកំពុងជា Draft\n/release - Publish ទាំងអស់ម្តងតែម្តង\n\n"
+            "🛠 គ្រប់គ្រង:\n/listitems - មើល/កែ/លុប ទំនិញ\n/orders - Order កំពុងរង់ចាំ\n/orderhistory - Order ថ្មីៗទាំងអស់\n"
+            "/setpayment - កំណត់ QR + ព័ត៌មានទូទាត់\n/showpayment - មើល QR បច្ចុប្បន្ន\n"
+            "/setkhqr - កំណត់ KHQR ស្វ័យប្រវត្តិ\n/showkhqr - សាកល្បង KHQR\n"
+            "/panel - 🛠 បើក Admin Panel (Web, ងាយប្រើជាង)\n/findemoji - ✨ រក Premium Emoji ID\n"
+            "/stats - ស្ថិតិហាង\n/users - អ្នកប្រើប្រាស់ចុងក្រោយ")
+    if is_owner(update):
+        text += "\n\n👑 Owner:\n/addseller <id> - បន្ថែម Admin\n/removeseller <id> - លុប Admin\n/sellers - មើលបញ្ជី Admin"
+    await update.message.reply_text(text)
 
-  .buybar{ position:fixed; left:0; right:0; bottom:0; z-index:25; max-width:520px; margin:0 auto;
-    background:rgba(10,6,20,.95); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
-    border-top:1px solid var(--line); padding:10px 14px calc(10px + env(safe-area-inset-bottom));
-    transform:translateY(100%); transition:transform .25s cubic-bezier(.2,.9,.3,1); }
-  .buybar.show{ transform:translateY(0); }
-  .buybar-price{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; padding:0 2px; }
-  .buybar-price .bp-label{ font-size:11px; color:var(--muted); }
-  .buybar-price .bp-val{ font-family:'Manrope',sans-serif; font-weight:800; font-size:19px; color:var(--gold-1); }
-  .buybar button{ width:100%; border:none; border-radius:999px; padding:14px 0; font-size:14.5px;
-    font-weight:700; color:#fff; background:linear-gradient(135deg, var(--coral-1), var(--coral-2));
-    cursor:pointer; }
 
-  /* ===== Payment full page ===== */
-  .payment-wrap{ padding-bottom:calc(40px + env(safe-area-inset-bottom)); }
-  .co{ padding:6px 4px 0; text-align:center; }
-  .co-title{ font-size:15.5px; font-weight:800; margin-bottom:4px; font-family:'Manrope',sans-serif; }
-  .co-sub{ font-size:12.5px; color:var(--muted); margin-bottom:14px; }
-  .co-qr{ width:222px; height:222px; margin:0 auto 10px; border-radius:16px; overflow:hidden; position:relative;
-    background:#fff; display:flex; align-items:center; justify-content:center; border:2px solid var(--coral-1); }
-  .co-qr img{ width:100%; height:100%; object-fit:contain; }
-  .co-qr.zoomable{ cursor:zoom-in; }
-  .co-qr-hint{ font-size:11px; color:var(--muted); margin-bottom:14px; }
-  .qr-countdown{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; color:var(--warranty);
-    background:rgba(52,211,153,.1); border:1px solid rgba(52,211,153,.3); padding:6px 14px; border-radius:999px; margin-bottom:6px; }
-  .qr-countdown.danger{ color:var(--danger); background:rgba(255,90,90,.1); border-color:rgba(255,90,90,.3); }
-  .qr-expired-overlay{ position:absolute; inset:0; background:rgba(8,4,15,.94);
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; border-radius:12px; text-align:center; padding:12px; }
-  .qr-expired-overlay p{ font-size:11.5px; color:var(--cloud); margin:0; font-weight:600; }
-  .qr-refresh-btn{ border:none; border-radius:999px; padding:9px 18px; font-size:11.5px; font-weight:700; color:#fff;
-    background:linear-gradient(135deg, var(--coral-1), var(--coral-2)); cursor:pointer; }
-  .co-price{ font-family:'Manrope',sans-serif; font-weight:800; font-size:25px; letter-spacing:.2px; margin-bottom:2px;
-    color:var(--gold-1); }
-  .co-price-old{ font-size:13px; color:var(--muted); text-decoration:line-through; margin-bottom:10px; }
-  .co-note{ font-size:12px; color:var(--muted); white-space:pre-wrap; margin-bottom:14px; }
-  .co-upload{ display:block; width:100%; padding:14px; border-radius:12px; border:1.5px dashed var(--line);
-    background:var(--card); color:var(--muted); font-size:13px; cursor:pointer; margin-bottom:10px; }
-  .co-upload.has-file{ border-color:var(--warranty); color:var(--warranty); }
-  .co-btn{ width:100%; border:none; border-radius:999px; padding:14px 0; font-size:13.5px; font-weight:700;
-    margin-top:8px; cursor:pointer; }
-  .co-btn:last-child{ margin-bottom:2px; }
-  .co-btn.primary{ color:#fff; background:linear-gradient(135deg, var(--coral-1), var(--coral-2)); }
-  .co-btn.ghost{ color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:12px; }
-  .co-spin{ width:34px; height:34px; border:3px solid rgba(168,85,247,.18); border-top-color:var(--coral-1);
-    border-radius:50%; margin:8px auto 16px; animation:spin .8s linear infinite; }
-  .co-delivery{ text-align:left; background:var(--card); border:1px solid rgba(52,211,153,.25); border-radius:16px;
-    padding:14px; font-size:13px; line-height:1.7; white-space:pre-wrap; margin:14px 0; color:var(--cloud); }
-  .co-delivery code{ background:rgba(168,85,247,.14); color:#e2cbff; padding:2px 6px; border-radius:6px;
-    font-size:12.5px; font-family:'Space Mono',monospace; }
-  .co-copybtn{ margin-top:8px; font-size:11.5px; padding:9px 15px; border-radius:999px; border:1px solid var(--line);
-    background:var(--card); color:var(--cloud); cursor:pointer; }
-  .co-refreshbtn{ margin-top:8px; margin-left:8px; font-size:11.5px; padding:9px 15px; border-radius:999px; border:1px solid var(--line);
-    background:var(--card); color:var(--blue); cursor:pointer; }
+# ---- web admin panel launcher ----
 
-  /* Coupon */
-  .coupon-row{ display:flex; gap:8px; margin-top:4px; margin-bottom:2px; }
-  .coupon-input{ flex:1; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px;
-    color:var(--cloud); font-size:13px; outline:none; font-family:inherit; }
-  .coupon-input::placeholder{ color:var(--muted); }
-  .coupon-apply{ flex-shrink:0; border:1px solid var(--coral-1); border-radius:999px; padding:0 17px; font-size:12px; font-weight:700;
-    color:#e9d8ff; background:transparent; cursor:pointer; }
-  .coupon-msg{ font-size:11.5px; margin:6px 0 12px; min-height:14px; text-align:left; }
-  .coupon-msg.ok{ color:var(--warranty); }
-  .coupon-msg.err{ color:var(--danger); }
+async def panel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    if not WEBAPP_URL:
+        return await update.message.reply_text("Web Panel មិនទាន់បើកដំណើរការទេ (WEBAPP_URL មិនទាន់កំណត់)។")
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("🛠 បើក Admin Panel", web_app=WebAppInfo(url=f"{WEBAPP_URL}/admin"))]])
+    await update.message.reply_text("ចុចប៊ូតុងខាងក្រោមដើម្បីបើក Admin Panel (បន្ថែម/កែ/លុប ទំនិញ, មើល Order):", reply_markup=kb)
 
-  /* Login / authenticator guide */
-  .guide-box{ text-align:left; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-top:12px; }
-  .guide-title{ font-size:12px; font-weight:800; color:var(--cloud); margin-bottom:8px; font-family:'Manrope',sans-serif; }
-  .guide-list{ margin:0; padding-left:18px; font-size:12px; line-height:1.9; color:var(--muted); }
-  .guide-list li{ margin-bottom:2px; }
-  .guide-list b{ color:var(--cloud); }
-  .guide-list code{ background:rgba(168,85,247,.14); color:#e2cbff; padding:1px 5px; border-radius:5px; font-size:11.5px; }
-  .guide-video-box{ text-align:left; margin-top:10px; }
-  .guide-video{ width:100%; border-radius:16px; margin-top:6px; background:#000; display:block; }
-  .guide-video-empty{ margin-top:6px; background:var(--card); border:1px dashed var(--line); border-radius:16px;
-    padding:22px 14px; text-align:center; color:var(--muted); font-size:12px; }
 
-  /* Fullscreen image lightbox (zoom) — used for product photo + QR, not a "page" */
-  .lightbox-bg{ position:fixed; inset:0; z-index:60; background:rgba(4,2,8,.96); display:flex; align-items:center; justify-content:center;
-    opacity:0; pointer-events:none; transition:opacity .2s; }
-  .lightbox-bg.show{ opacity:1; pointer-events:all; }
-  .lightbox-close{ position:absolute; top:calc(14px + env(safe-area-inset-top)); right:16px; width:36px; height:36px; border-radius:50%;
-    background:rgba(255,255,255,.06); border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
-    color:var(--cloud); font-size:16px; z-index:61; cursor:pointer; }
-  .lightbox-img{ max-width:92vw; max-height:80vh; object-fit:contain; border-radius:10px; transition:transform .25s ease; cursor:zoom-in; }
-  .lightbox-img.zoomed{ transform:scale(2); cursor:zoom-out; }
-  .lightbox-hint{ position:absolute; bottom:calc(24px + env(safe-area-inset-bottom)); left:0; right:0; text-align:center;
-    color:var(--muted); font-size:11.5px; }
-</style>
-</head>
-<body data-bot="{{ bot_username }}" data-login-video="{{ login_video_url }}">
+# ---- premium emoji ID finder ----
 
-  <div class="fx"><div class="glow"></div><div class="glow-bottom"></div></div>
+async def findemoji(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    context.user_data.clear()
+    context.user_data["state"] = "await_emoji_probe"
+    await update.message.reply_text(
+        "✨ បិទភ្ជាប់ (Paste) Premium Emoji ដែលអ្នកចង់ប្រើ ផ្ញើមកទីនេះ\n"
+        "(ត្រូវ Paste ជា Emoji ផ្ទាល់ មិនមែន copy ជា text ធម្មតា — ត្រូវការ Telegram Premium ដើម្បី Paste)"
+    )
 
-  <div class="wrap">
 
-    <div class="screen active" id="screenHome">
-      <audio id="bgMusic" loop preload="none">{% if music_url %}<source src="{{ music_url }}">{% endif %}</audio>
-      <header>
-        <div class="logo-ring"><div class="logo-ring-inner">
-          {% if logo_url %}<img src="{{ logo_url }}">{% else %}<div class="fallback">◆</div>{% endif %}
-        </div></div>
-        <div class="logo-word">UCHIRO</div>
-        <div class="logo-sub">Blox Fruits · Multi-Game</div>
-        <div class="badgerow"><div class="trust"><span class="live-dot"></span> ការទិញត្រូវបានធានា 100%</div></div>
-      </header>
+# ---- rules / warranty ----
 
-      <!-- ===== NEW: Hot Products carousel — pulls straight from your own categories/items ===== -->
-      <div class="hot-wrap">
-        <div class="hot-eyebrow"><span>◆ Featured</span></div>
-        <div class="hot-title">ទំនិញ <b>លក់ដាច់បំផុត</b></div>
-        <div class="hot-stage">
-          <div class="hot-track" id="hotTrack">
-            <div class="hot-empty">កំពុងផ្ទុក...</div>
-          </div>
-        </div>
-        <div class="hot-nav"><button id="hotPrevBtn">‹</button><button id="hotNextBtn">›</button></div>
-      </div>
+async def setrules(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    context.user_data.clear()
+    context.user_data["state"] = "await_rules"
+    await update.message.reply_text(
+        "📜 វាយវិធាន/Warranty ថ្មី (វាយបែបណាក៏បាន) — Player នឹងមើលបានតាម /rules:\n\n"
+        f"គំរូបច្ចុប្បន្ន:\n{db.get_setting('rules_text', DEFAULT_RULES)}"
+    )
 
-      <div class="searchbar">
-        <div class="search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8d84ab" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-          <input id="searchInput" placeholder="ស្វែងរក..." />
-        </div>
-      </div>
-      <div class="pricerow" id="priceRow">
-        <div class="pill active" data-min="0" data-max="999999">ថ្មីៗ</div>
-        <div class="pill" data-min="0" data-max="10">ក្រោម 10$</div>
-        <div class="pill" data-min="10" data-max="20">$10–20</div>
-        <div class="pill" data-min="30" data-max="999999">$30+</div>
-        <div class="pill" id="refreshPill">🔄 Refresh</div>
-      </div>
-      <div class="grid" id="homeGrid">
-        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-      </div>
-    </div>
 
-    <div class="screen" id="screenCategories">
-      <div id="catShelfView">
-        <div class="page-title">ប្រភេទទំនិញ</div>
-        <div class="page-sub">ចុចប្រភេទណាមួយ ដើម្បីមើលទំនិញទាំងអស់</div>
-        <div class="catgrid" id="catGrid"></div>
-      </div>
-      <div id="catDetailView" style="display:none;">
-        <div class="back-row">
-          <div class="back-btn" id="catBackBtn">←</div>
-          <div class="back-title" id="catDetailTitle"></div>
-        </div>
-        <div class="grid" id="catDetailGrid"></div>
-      </div>
-    </div>
+# ---- codes / tierlist / guides (admin side) ----
 
-    <div class="screen" id="screenOrders">
-      <div class="page-title">Order របស់ខ្ញុំ</div>
-      <div class="page-sub">មើលប្រវត្តិការទិញ និង Warranty ដែលនៅសល់</div>
-      <div id="ordersList"></div>
-    </div>
+async def setcodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    context.user_data.clear()
+    context.user_data["state"] = "await_codes"
+    await update.message.reply_text("🎁 វាយ Code ថ្មីទាំងអស់ (១បន្ទាត់ = ១ Code):")
 
-    <div class="screen" id="screenProfile">
-      <div class="page-title">គណនី & Setting</div>
-      <div class="page-sub">ភាសា, ចម្រៀង, ទំនាក់ទំនង, វិធាន</div>
-      <div class="prow" id="musicRow">
-        <div class="pl">🎵 ចម្រៀង</div>
-        <div class="toggle" id="musicToggle"></div>
-      </div>
-      <div class="prow" id="langRow">
-        <div class="pl">🌐 ភាសា</div>
-        <div class="pv" id="langValue">ខ្មែរ</div>
-      </div>
-      <a class="prow" style="text-decoration:none; color:inherit;" href="https://t.me/{{ channel_username }}" target="_blank">
-        <div class="pl">📢 Channel</div><div class="pv">@{{ channel_username }}</div>
-      </a>
-      <a class="prow" style="text-decoration:none; color:inherit;" href="https://t.me/{{ admin_username }}" target="_blank">
-        <div class="pl">📞 ទាក់ទង Admin</div><div class="pv">@{{ admin_username }}</div>
-      </a>
-      <div class="prow" id="rulesRow">
-        <div class="pl">📜 វិធាន / Warranty</div><div class="pv">មើល</div>
-      </div>
-      <div class="rules-box" id="rulesBox"></div>
-    </div>
 
-    <!-- ===== Product page (full page, not a popup sheet) ===== -->
-    <div class="screen" id="screenProduct">
-      <div class="back-row">
-        <div class="back-btn" id="productBackBtn">←</div>
-        <div class="back-title">ព័ត៌មានទំនិញ</div>
-      </div>
-      <div class="thumb-big" id="pThumb"><div class="ph">◆</div></div>
-      <div class="product-body">
-        <div class="sheet-name" id="pName"></div>
-        <div class="sheet-badges" id="pBadges"></div>
-        <div class="sheet-desc" id="pDesc"></div>
-        <div class="sheet-price" id="pPrice"></div>
-      </div>
-    </div>
+async def settierlist(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    context.user_data.clear()
+    context.user_data["state"] = "await_tierlist"
+    await update.message.reply_text("🍈 វាយ Fruit Tier List ថ្មី (វាយបែបណាក៏បាន):")
 
-    <!-- ===== Payment page (full page) ===== -->
-    <div class="screen" id="screenPayment">
-      <div class="back-row">
-        <div class="back-btn" id="paymentBackBtn">←</div>
-        <div class="back-title">ការទូទាត់</div>
-      </div>
-      <div class="payment-wrap" id="paymentContent"></div>
-    </div>
 
-  </div>
+async def addguide(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    text = " ".join(context.args)
+    if "|" not in text:
+        return await update.message.reply_text("ប្រើ: /addguide ចំណងជើង | Link YouTube\nឧ. /addguide របៀបយក Dough V4 | https://youtu.be/xxxx")
+    title, url = [p.strip() for p in text.split("|", 1)]
+    guide_id = db.add_guide(title, url)
+    await update.message.reply_text(f"✅ បានបន្ថែម Guide #{guide_id}: {title}")
 
-  <nav class="bottomnav" id="bottomNav">
-    <div class="navitem active" data-screen="home"><span class="ni">⌂</span>ដើម</div>
-    <div class="navitem" data-screen="categories"><span class="ni">▤</span>ប្រភេទ</div>
-    <div class="navitem" data-screen="orders"><span class="ni">▧</span>Order</div>
-    <div class="navitem" data-screen="profile"><span class="ni">◈</span>គណនី</div>
-  </nav>
 
-  <div class="buybar" id="productBuyBar">
-    <div class="buybar-price"><span class="bp-label">តម្លៃសរុប</span><span class="bp-val" id="buyBarPrice"></span></div>
-    <button id="buyBarBtn">ទិញឥឡូវ</button>
-  </div>
+async def removeguide(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    if not context.args or not context.args[0].isdigit():
+        return await update.message.reply_text("ប្រើ: /removeguide <guide_id>")
+    db.delete_guide(int(context.args[0]))
+    await update.message.reply_text("✅ បានលុប Guide")
 
-  <div class="lightbox-bg" id="lightboxBg">
-    <div class="lightbox-close" id="lightboxClose">✕</div>
-    <img class="lightbox-img" id="lightboxImg" src="" alt="">
-    <div class="lightbox-hint">ចុចលើរូបភាព ដើម្បីពង្រីក/បង្រួម</div>
-  </div>
 
-<script>
-const tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor?.('#07070a'); tg.setBackgroundColor?.('#07070a'); }
+async def guides_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    guides = db.list_guides()
+    if not guides:
+        return await update.message.reply_text("មិនទាន់មាន Guide ទេ។ ប្រើ /addguide")
+    lines = [f"#{g['id']} {g['title']} — {g['video_url']}" for g in guides]
+    await update.message.reply_text("📺 Guide ទាំងអស់:\n\n" + "\n".join(lines))
 
-let ALL_ITEMS = [];
-let CATEGORIES = [];
-let homeState = { search: '', min: 0, max: 999999 };
-let currentItem = null;
-let cameFrom = 'home';
-const CAT_ICONS = { 'Account':'👤', 'Fruit':'🍈', 'Gamepass':'🎮', 'Evade':'🏃', 'Robux':'💎', 'Blade Ball':'⚔️', 'MM2':'🔪' };
-const QR_TTL_SECONDS = 600; // KHQR is valid for 10 minutes before we force a refresh
 
-function haptic(){ tg?.HapticFeedback?.impactOccurred('light'); }
+# ---- add item (Account, with photo) ----
 
-// Very small formatter: turns the bot's `code` / *bold* markdown into safe HTML for the
-// delivery card. Escapes everything else first so item names etc. can't inject markup.
-function escapeHtml(s){
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function formatDeliveryText(raw){
-  let s = escapeHtml(raw);
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-  s = s.replace(/\*([^*]+)\*/g, '<b>$1</b>');
-  s = s.replace(/_([^_]+)_/g, '<i>$1</i>');
-  return s;
+async def additem(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    context.user_data.clear()
+    context.user_data["new_item"] = {}
+    kb = [[InlineKeyboardButton(c, callback_data=f"newcat_{c}")] for c in CATEGORIES]
+    await update.message.reply_text("ជ្រើសរើសប្រភេទ:", reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def newcat_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not is_admin(update):
+        return await deny(update)
+    await query.answer()
+    context.user_data["new_item"] = {"category": query.data.split("_", 1)[1]}
+    context.user_data["state"] = "add_name"
+    await query.edit_message_text(f"ប្រភេទ: {context.user_data['new_item']['category']}\n\nវាយឈ្មោះទំនិញ:")
+
+
+ADD_STEPS = {
+    "add_name": ("name", str, "តម្លៃប៉ុន្មាន? (លេខ)", "add_price"),
+    "add_price": ("price", float, "ពិពណ៌នាលម្អិត:", "add_desc"),
+    "add_desc": ("description", str, "ស្តុកប៉ុន្មាន? (លេខគត់)", "add_qty"),
+    "add_qty": ("quantity", int, "ព័ត៌មានប្រគល់ជូន (Login/Password/Code) — វាយ - បើមិនទាន់មាន:", "add_delivery"),
+    "add_delivery": ("delivery_info", str,
+                      "🔐 Authenticator Secret Key (2FA setup key ពី Roblox/គណនី) — វាយ - បើគណនីនេះមិនប្រើ 2FA:",
+                      "add_totp"),
+    "add_totp": ("totp_secret", str, "ផ្ញើរូបភាពទំនិញ:", "add_photo"),
 }
 
-// ===== Fullscreen image lightbox (used for product/account photos + QR zoom) =====
-function openLightbox(url){
-  if (!url) return;
-  const img = document.getElementById('lightboxImg');
-  img.src = url; img.classList.remove('zoomed');
-  document.getElementById('lightboxBg').classList.add('show');
-  haptic();
-}
-function closeLightbox(){
-  document.getElementById('lightboxBg').classList.remove('show');
-  document.getElementById('lightboxImg').classList.remove('zoomed');
-}
-document.getElementById('lightboxClose').onclick = closeLightbox;
-document.getElementById('lightboxBg').onclick = (e)=>{ if (e.target.id === 'lightboxBg') closeLightbox(); };
-document.getElementById('lightboxImg').onclick = (e)=>{
-  e.stopPropagation();
-  document.getElementById('lightboxImg').classList.toggle('zoomed');
-};
 
-// ===== Simple screen router (Home / Categories / Orders / Profile / Product / Payment) =====
-function goToScreen(key){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById('screen' + key.charAt(0).toUpperCase() + key.slice(1)).classList.add('active');
-}
-function setChromeForSubpage(hide){
-  document.getElementById('bottomNav').style.display = hide ? 'none' : '';
-  document.body.classList.toggle('hide-nav', hide);
-}
-function clearTimers(){
-  if (window._pollTimer) clearInterval(window._pollTimer);
-  if (window._qrTimer) clearInterval(window._qrTimer);
-}
+# ---- bulk add (Fruit/Gamepass/Evade/Robux/Blade Ball/MM2) ----
 
-document.querySelectorAll('.navitem').forEach(nav=>{
-  nav.onclick = ()=>{
-    haptic();
-    document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
-    nav.classList.add('active');
-    const key = nav.dataset.screen;
-    goToScreen(key);
-    if (key === 'categories') renderCatShelf();
-    if (key === 'orders') loadMyOrders();
-    window.scrollTo(0,0);
-  };
-});
+async def addstock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    context.user_data.clear()
+    kb = [[InlineKeyboardButton(c, callback_data=f"bulkcat_{c}")] for c in STOCK_CATEGORIES]
+    await update.message.reply_text("ជ្រើសរើសប្រភេទ ដែលចង់បន្ថែម Stock ច្រើនក្នុងម្តង:", reply_markup=InlineKeyboardMarkup(kb))
 
-async function loadItems(){
-  try{
-    const res = await fetch('/api/items');
-    const data = await res.json();
-    ALL_ITEMS = data.items;
-    CATEGORIES = data.categories;
-    renderHomeGrid();
-  }catch(e){
-    document.getElementById('homeGrid').innerHTML = '<div class="empty"><div class="em">⚠</div>មិនអាចផ្ទុកទិន្នន័យបានទេ<br>សូម Refresh ម្តងទៀត</div>';
-  }
-}
 
-function cardHTML(it){
-  const thumbInner = it.photo_url ? `<img src="${it.photo_url}" loading="lazy">` : `<div class="ph">${it.category==='Account'?'👤':'🍈'}</div>`;
-  const topBadge = it.category === 'Account' ? '<div class="badge-war">Warranty 14ថ្ងៃ</div>' : '<div class="badge-trade">Trade</div>';
-  const stockBadge = it.category === 'Account' ? '' : `<div class="badge-stock">${it.quantity} នៅសល់</div>`;
-  const newBadge = it.is_new ? '<div class="badge-new">New</div>' : '';
-  return `<div class="thumb">${topBadge}${stockBadge}${newBadge}${thumbInner}</div>
-    <div class="info"><div class="name">${it.name}</div><div class="price">$${it.price}</div>
-    <button class="buybtn">ទិញឥឡូវ</button></div>`;
-}
+async def bulkcat_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not is_admin(update):
+        return await deny(update)
+    await query.answer()
+    category = query.data.split("_", 1)[1]
+    context.user_data.clear()
+    context.user_data["state"] = "bulk_add"
+    context.user_data["bulk_category"] = category
+    await query.edit_message_text(
+        f"⚡ វាយបញ្ជី {category} (១បន្ទាត់ = ១មុខ) ទម្រង់៖\n"
+        "ឈ្មោះ, តម្លៃ, ស្តុក\n\n"
+        "ឧទាហរណ៍ (វាយច្រើនបន្ទាត់ម្តងបាន):\n"
+        "East Dragon, 1.25, 3\n"
+        "Buddha, 1.25, 1\n\n"
+        "ផ្ញើមកតែម្តង Bot នឹងបន្ថែមទាំងអស់ភ្លាមៗ។ /cancel ដើម្បីបោះបង់"
+    )
 
-function renderGridInto(container, items, from){
-  if (items.length === 0){
-    container.innerHTML = '<div class="empty"><div class="em">⌕</div>រកមិនឃើញទំនិញទេ</div>';
-    return;
-  }
-  container.innerHTML = '';
-  items.forEach((it, idx)=>{
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.style.animationDelay = (idx*0.03)+'s';
-    card.innerHTML = cardHTML(it);
-    card.onclick = ()=>openProductPage(it, from);
-    container.appendChild(card);
-  });
-}
 
-function renderHomeGrid(){
-  const items = ALL_ITEMS.filter(it=>{
-    if (homeState.search && !it.name.toLowerCase().includes(homeState.search)) return false;
-    if (it.price < homeState.min || it.price > homeState.max) return false;
-    return true;
-  });
-  renderGridInto(document.getElementById('homeGrid'), items, 'home');
-}
+async def addfruit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    context.user_data.clear()
+    context.user_data["state"] = "bulk_add"
+    context.user_data["bulk_category"] = "Fruit"
+    await update.message.reply_text(
+        "🍎 វាយបញ្ជីផ្លែឈើ (១បន្ទាត់ = ១មុខ) ទម្រង់៖\n"
+        "ឈ្មោះ, តម្លៃ, ស្តុក\n\n"
+        "ឧទាហរណ៍ (វាយច្រើនបន្ទាត់ម្តងបាន):\n"
+        "East Dragon, 1.25, 3\n"
+        "Buddha, 1.25, 1\n"
+        "Rocket, 1, 5\n\n"
+        "ផ្ញើមកតែម្តង Bot នឹងបន្ថែមទាំងអស់ភ្លាមៗ។ /cancel ដើម្បីបោះបង់"
+    )
 
-document.getElementById('searchInput').addEventListener('input', e=>{
-  homeState.search = e.target.value.trim().toLowerCase();
-  renderHomeGrid();
-});
-document.querySelectorAll('#priceRow .pill').forEach(p=>{
-  if (p.id === 'refreshPill') return;
-  p.onclick = ()=>{
-    haptic();
-    document.querySelectorAll('#priceRow .pill').forEach(x=>x.classList.remove('active'));
-    p.classList.add('active');
-    homeState.min = parseFloat(p.dataset.min); homeState.max = parseFloat(p.dataset.max);
-    renderHomeGrid();
-  };
-});
-document.getElementById('refreshPill').onclick = ()=>{
-  haptic();
-  document.getElementById('homeGrid').innerHTML = `
-    <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-    <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>`;
-  loadItems();
-};
 
-function renderCatShelf(){
-  document.getElementById('catShelfView').style.display = '';
-  document.getElementById('catDetailView').style.display = 'none';
-  const grid = document.getElementById('catGrid');
-  grid.innerHTML = '';
-  CATEGORIES.forEach(cat=>{
-    const count = ALL_ITEMS.filter(it=>it.category===cat).length;
-    const el = document.createElement('div');
-    el.className = 'catcard';
-    el.innerHTML = `<div class="ci">${CAT_ICONS[cat]||'📦'}</div><div class="cn">${cat}</div><div class="cc">${count} មុខ</div>`;
-    el.onclick = ()=>openCategoryDetail(cat);
-    grid.appendChild(el);
-  });
-}
+async def addgamepass(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    context.user_data.clear()
+    context.user_data["state"] = "bulk_add"
+    context.user_data["bulk_category"] = "Gamepass"
+    await update.message.reply_text(
+        "🎮 វាយបញ្ជី Gamepass (១បន្ទាត់ = ១មុខ) ទម្រង់៖\n"
+        "ឈ្មោះ, តម្លៃ, ស្តុក\n\n"
+        "ឧទាហរណ៍ (វាយច្រើនបន្ទាត់ម្តងបាន):\n"
+        "2x Boost, 2, 10\n"
+        "Fruit Notifier, 1.5, 10\n\n"
+        "ផ្ញើមកតែម្តង Bot នឹងបន្ថែមទាំងអស់ភ្លាមៗ។ /cancel ដើម្បីបោះបង់"
+    )
 
-function openCategoryDetail(cat){
-  haptic();
-  document.getElementById('catShelfView').style.display = 'none';
-  document.getElementById('catDetailView').style.display = '';
-  document.getElementById('catDetailTitle').textContent = `${CAT_ICONS[cat]||'📦'} ${cat}`;
-  const items = ALL_ITEMS.filter(it=>it.category===cat);
-  renderGridInto(document.getElementById('catDetailGrid'), items, 'categories');
-}
-document.getElementById('catBackBtn').onclick = ()=>{ haptic(); renderCatShelf(); };
 
-async function loadMyOrders(){
-  const box = document.getElementById('ordersList');
-  const initData = tg?.initData;
-  if (!initData){
-    box.innerHTML = '<div class="empty"><div class="em">🔒</div>សូមបើក App នេះតាម Telegram Bot ដើម្បីមើល Order</div>';
-    return;
-  }
-  box.innerHTML = '<div class="empty"><div class="em">…</div>កំពុងផ្ទុក...</div>';
-  try{
-    const res = await fetch(`/api/my-orders?init_data=${encodeURIComponent(initData)}`);
-    const data = await res.json();
-    if (!data.orders || !data.orders.length){
-      box.innerHTML = '<div class="empty"><div class="em">▧</div>អ្នកមិនទាន់មាន Order ណាទេ</div>';
-      return;
-    }
-    const statusText = {pending:'កំពុងរង់ចាំ', approved:'អនុម័តរួច', rejected:'បដិសេធ'};
-    box.innerHTML = data.orders.map(o=>`
-      <div class="order-card">
-        <div class="order-top">
-          <div class="order-name">#${o.id} ${o.item_name}</div>
-          <div class="order-status ${o.status}">${statusText[o.status]||o.status}</div>
-        </div>
-        <div class="order-meta">${o.created_at}</div>
-        ${o.warranty ? `<div class="order-warranty">${o.warranty}</div>` : ''}
-      </div>`).join('');
-  }catch(e){
-    box.innerHTML = '<div class="empty"><div class="em">⚠</div>មិនអាចផ្ទុកបានទេ</div>';
-  }
-}
+async def cancel_state(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    context.user_data.clear()
+    await update.message.reply_text("បានបោះបង់។")
 
-const music = document.getElementById('bgMusic');
-let musicOn = false;
-document.getElementById('musicRow').onclick = ()=>{
-  haptic();
-  if (!music.querySelector('source')?.src) return alert('ម្ចាស់ហាងមិនទាន់កំណត់ចម្រៀងទេ');
-  musicOn = !musicOn;
-  document.getElementById('musicToggle').classList.toggle('on', musicOn);
-  if (musicOn) music.play().catch(()=>{}); else music.pause();
-};
 
-let curLang = 'km';
-document.getElementById('langRow').onclick = ()=>{
-  haptic();
-  curLang = curLang === 'km' ? 'en' : 'km';
-  document.getElementById('langValue').textContent = curLang === 'km' ? 'ខ្មែរ' : 'English';
-  document.getElementById('searchInput').placeholder = curLang === 'km' ? 'ស្វែងរក...' : 'Search...';
-};
+async def setstock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    if len(context.args) != 2 or not context.args[0].isdigit():
+        return await update.message.reply_text("ប្រើ: /setstock <item_id> <ចំនួន>")
+    item_id = int(context.args[0])
+    if not db.get_item(item_id):
+        return await update.message.reply_text(f"រកមិនឃើញទំនិញ #{item_id} ទេ")
+    try:
+        qty = int(context.args[1])
+    except ValueError:
+        return await update.message.reply_text("ស្តុកត្រូវជាលេខគត់")
+    db.update_item_field(item_id, "quantity", qty)
+    db.update_item_field(item_id, "active", 1 if qty > 0 else 0)
+    await update.message.reply_text(f"✅ បានកែស្តុក #{item_id} ទៅ {qty}")
 
-let rulesLoaded = false;
-document.getElementById('rulesRow').onclick = async ()=>{
-  haptic();
-  const box = document.getElementById('rulesBox');
-  box.classList.toggle('show');
-  if (!rulesLoaded && box.classList.contains('show')){
-    box.textContent = 'កំពុងផ្ទុក...';
-    try{
-      const res = await fetch('/api/rules');
-      const data = await res.json();
-      box.textContent = data.rules;
-      rulesLoaded = true;
-    }catch(e){ box.textContent = 'មិនអាចផ្ទុកបានទេ'; }
-  }
-};
 
-// ===== Product page (full page) =====
-function openProductPage(it, from){
-  haptic();
-  clearTimers();
-  currentItem = it;
-  cameFrom = from || 'home';
-  document.getElementById('pName').textContent = it.name;
-  document.getElementById('pDesc').textContent = it.description || 'គ្មានពិពណ៌នាបន្ថែម';
-  document.getElementById('pPrice').textContent = '$' + it.price;
-  document.getElementById('buyBarPrice').textContent = '$' + it.price;
-  const thumb = document.getElementById('pThumb');
-  if (it.photo_url){
-    thumb.innerHTML = `<img src="${it.photo_url}"><div class="zoom-tag">ពង្រីក</div>`;
-    thumb.classList.add('zoomable');
-    thumb.onclick = ()=> openLightbox(it.photo_url);
-  } else {
-    thumb.innerHTML = `<div class="ph">${it.category==='Account'?'👤':'🍈'}</div>`;
-    thumb.classList.remove('zoomable');
-    thumb.onclick = null;
-  }
-  const badges = document.getElementById('pBadges');
-  if (it.category === 'Account') {
-    badges.innerHTML = `<div class="b stock">${it.category}</div><div class="b war">Warranty 14ថ្ងៃ</div>`;
-  } else {
-    badges.innerHTML = `<div class="b stock">${it.category}</div><div class="b stock">${it.quantity} នៅសល់</div><div class="b war" style="color:#e9d8ff;border-color:rgba(168,85,247,.35);background:rgba(168,85,247,.12)">Trade Item</div>`;
-  }
-  goToScreen('product');
-  setChromeForSubpage(true);
-  document.getElementById('productBuyBar').classList.add('show');
-  window.scrollTo(0,0);
-}
+async def setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    if len(context.args) != 2 or not context.args[0].isdigit():
+        return await update.message.reply_text("ប្រើ: /setprice <item_id> <តម្លៃ>")
+    item_id = int(context.args[0])
+    if not db.get_item(item_id):
+        return await update.message.reply_text(f"រកមិនឃើញទំនិញ #{item_id} ទេ")
+    try:
+        price = float(context.args[1])
+    except ValueError:
+        return await update.message.reply_text("តម្លៃត្រូវជាលេខ")
+    db.update_item_field(item_id, "price", price)
+    await update.message.reply_text(f"✅ បានកែតម្លៃ #{item_id} ទៅ {format_price(price, CURRENCY)}")
 
-document.getElementById('productBackBtn').onclick = ()=>{
-  haptic();
-  document.getElementById('productBuyBar').classList.remove('show');
-  setChromeForSubpage(false);
-  goToScreen(cameFrom);
-  window.scrollTo(0,0);
-};
 
-document.getElementById('buyBarBtn').onclick = ()=>{
-  if (currentItem) openPaymentPage(currentItem);
-};
+# ---- text / photo state machine ----
 
-// ===== Payment page (full page) =====
-function openPaymentPage(it){
-  haptic();
-  document.getElementById('productBuyBar').classList.remove('show');
-  goToScreen('payment');
-  setChromeForSubpage(true);
-  window.scrollTo(0,0);
-  startCheckout(it);
-}
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    state = context.user_data.get("state")
+    if not state or not is_admin(update):
+        return
+    text = update.message.text.strip()
 
-document.getElementById('paymentBackBtn').onclick = ()=>{
-  haptic();
-  clearTimers();
-  goToScreen('product');
-  document.getElementById('productBuyBar').classList.add('show');
-  window.scrollTo(0,0);
-};
+    if state == "await_emoji_probe":
+        context.user_data["state"] = None
+        entities = update.message.entities or []
+        found = [e for e in entities if e.type == "custom_emoji"]
+        if not found:
+            return await update.message.reply_text(
+                "❌ មិនឃើញ Premium Emoji ទេ។ ត្រូវប្រាកដថា៖\n"
+                "1) អ្នកមាន Telegram Premium\n"
+                "2) Paste Emoji ចូលផ្ទាល់ (មិនមែនវាយ ឬ copy ជា Unicode text ធម្មតា)"
+            )
+        lines = [f"{text[e.offset:e.offset + e.length]} → `{e.custom_emoji_id}`" for e in found]
+        return await update.message.reply_text(
+            "✅ រកឃើញ Emoji ID:\n\n" + "\n".join(lines) +
+            "\n\nចម្លង ID នេះទុក ផ្ញើមកខ្ញុំ ដើម្បីបញ្ចូលទៅក្នុងសារ Bot ជាកន្លែងណាមួយ។",
+            parse_mode="Markdown"
+        )
 
-function finishOrder(){
-  clearTimers();
-  setChromeForSubpage(false);
-  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
-  document.querySelector('.navitem[data-screen="home"]').classList.add('active');
-  goToScreen('home');
-  loadItems();
-  window.scrollTo(0,0);
-}
+    if state in ADD_STEPS:
+        field, cast, next_prompt, next_state = ADD_STEPS[state]
+        try:
+            value = "" if (field in ("delivery_info", "totp_secret") and text == "-") else cast(text)
+        except ValueError:
+            return await update.message.reply_text("សូមវាយឲ្យត្រឹមត្រូវ (លេខ) ម្តងទៀត:")
+        context.user_data["new_item"][field] = value
+        context.user_data["state"] = next_state
+        return await update.message.reply_text(next_prompt)
 
-function coStage(html){
-  document.getElementById('paymentContent').innerHTML = html;
-  window.scrollTo(0,0);
-}
+    if state == "edit_value":
+        return await apply_edit(update, context, text)
 
-// ===== KHQR 10-minute expiry countdown =====
-function startQrCountdown(seconds){
-  if (window._qrTimer) clearInterval(window._qrTimer);
-  let remain = seconds;
-  const el = document.getElementById('qrCountdown');
-  if (!el) return;
-  function render(){
-    const m = String(Math.floor(remain/60)).padStart(2,'0');
-    const s = String(remain%60).padStart(2,'0');
-    el.textContent = `សុពលភាព QR ${m}:${s}`;
-    el.classList.toggle('danger', remain <= 60);
-  }
-  render();
-  window._qrTimer = setInterval(()=>{
-    remain--;
-    if (remain <= 0){
-      clearInterval(window._qrTimer);
-      showQrExpired();
-      return;
-    }
-    render();
-  }, 1000);
-}
-function showQrExpired(){
-  const box = document.getElementById('coQrBox');
-  if (!box || box.querySelector('.qr-expired-overlay')) return;
-  box.onclick = null;
-  box.classList.remove('zoomable');
-  const overlay = document.createElement('div');
-  overlay.className = 'qr-expired-overlay';
-  overlay.innerHTML = `<p>QR នេះផុតកំណត់ហើយ</p><button class="qr-refresh-btn" id="qrRefreshBtn">បង្កើត QR ថ្មី</button>`;
-  box.appendChild(overlay);
-  document.getElementById('qrRefreshBtn').onclick = (e)=>{
-    e.stopPropagation();
-    haptic();
-    if (currentItem) startCheckout(currentItem);
-  };
-  const cd = document.getElementById('qrCountdown');
-  if (cd) cd.textContent = 'QR ផុតកំណត់';
-  if (cd) cd.classList.add('danger');
-}
+    if state == "await_payment_note":
+        db.set_setting("payment_note", "" if text == "-" else text)
+        context.user_data["state"] = None
+        return await update.message.reply_text("✅ បានកំណត់ព័ត៌មានទូទាត់ (QR + Note) រួចរាល់។")
 
-async function startCheckout(it){
-  if (window._qrTimer) clearInterval(window._qrTimer);
-  const initData = tg?.initData;
-  if (!initData){
-    const botUsername = document.body.dataset.bot;
-    const url = `https://t.me/${botUsername}?start=buy_${it.id}`;
-    if (tg?.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
-    document.getElementById('paymentBackBtn').click();
-    return;
-  }
-  coStage(`<div class="co"><div class="co-spin"></div><div class="co-sub">កំពុងរៀបចំការទូទាត់...</div></div>`);
-  let quote;
-  try{
-    const res = await fetch('/api/order/quote', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({item_id: it.id}) });
-    quote = await res.json();
-    if (!res.ok) throw new Error(quote.error || 'failed');
-  }catch(e){
-    coStage(`<div class="co"><div class="co-title">មានបញ្ហា</div><div class="co-sub">សូមទាក់ទងម្ចាស់ហាងផ្ទាល់</div>
-      <button class="co-btn ghost" id="quoteErrBackBtn">ត្រឡប់ក្រោយ</button></div>`);
-    document.getElementById('quoteErrBackBtn').onclick = ()=> document.getElementById('paymentBackBtn').click();
-    return;
-  }
-  renderPaymentStage(it, quote, initData);
-}
+    if state == "await_codes":
+        db.set_setting("codes_text", text)
+        context.user_data["state"] = None
+        return await update.message.reply_text("✅ បាន Update Code រួចរាល់! Player អាចមើលបានតាម /codes")
 
-function renderPaymentStage(it, quote, initData){
-  let appliedCoupon = null;
-  coStage(`
-    <div class="co">
-      <div class="co-title">${quote.name}</div>
-      <div class="co-price-old" id="coPriceOld" style="display:none;"></div>
-      <div class="co-price" id="coPriceMain">$${quote.price}</div>
-      <div class="coupon-row">
-        <input type="text" id="couponInput" class="coupon-input" placeholder="កូដបញ្ចុះតម្លៃ (បើមាន)">
-        <button class="coupon-apply" id="couponApplyBtn">អនុវត្ត</button>
-      </div>
-      <div class="coupon-msg" id="couponMsg"></div>
-      ${quote.qr_url ? `<div class="co-qr zoomable" id="coQrBox"><img src="${quote.qr_url}"></div>
-        <div class="qr-countdown" id="qrCountdown"></div>
-        <div class="co-qr-hint">ចុចលើ QR ដើម្បីពង្រីក</div>` : `<div class="co-sub">ម្ចាស់ហាងមិនទាន់កំណត់ QR ទេ សូមទាក់ទងផ្ទាល់</div>`}
-      ${quote.note ? `<div class="co-note">${quote.note}</div>` : ''}
-      ${quote.khqr_md5 ? `<div class="co-sub">ការទូទាត់នេះនឹងត្រូវបានផ្ទៀងផ្ទាត់ស្វ័យប្រវត្តិ បន្ទាប់ពីអ្នកបង់ប្រាក់ពិត</div>` : ''}
-      <label class="co-upload" id="uploadLabel">ចុចដើម្បីជ្រើសរើស Screenshot ទូទាត់
-        <input type="file" accept="image/*" id="paymentFile" style="display:none;">
-      </label>
-      <button class="co-btn primary" id="submitOrderBtn" disabled>ផ្ញើ Screenshot បញ្ជាក់</button>
-      <button class="co-btn ghost" id="cancelCheckoutBtn">បោះបង់</button>
-    </div>`);
+    if state == "await_tierlist":
+        db.set_setting("tierlist_text", text)
+        context.user_data["state"] = None
+        return await update.message.reply_text("✅ បាន Update Tier List រួចរាល់! Player អាចមើលបានតាម /tierlist")
 
-  if (quote.qr_url){
-    document.getElementById('coQrBox').onclick = ()=> openLightbox(quote.qr_url);
-    startQrCountdown(QR_TTL_SECONDS);
-  }
+    if state == "await_rules":
+        db.set_setting("rules_text", text)
+        context.user_data["state"] = None
+        return await update.message.reply_text("✅ បាន Update វិធាន/Warranty រួចរាល់! Player អាចមើលបានតាម /rules")
 
-  document.getElementById('couponApplyBtn').onclick = async ()=>{
-    const code = document.getElementById('couponInput').value.trim();
-    const msg = document.getElementById('couponMsg');
-    if (!code){ msg.textContent = 'សូមវាយកូដមុនសិន'; msg.className = 'coupon-msg err'; return; }
-    haptic();
-    msg.textContent = 'កំពុងពិនិត្យ...'; msg.className = 'coupon-msg';
-    try{
-      // NOTE: field name is `coupon_code` to match /api/order/submit — using a mismatched
-      // field name here was the reason "Apply" was silently failing before.
-      const res = await fetch('/api/order/apply-coupon', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ item_id: it.id, coupon_code: code })
-      });
-      let data;
-      try{ data = await res.json(); }catch(_){ data = {}; }
-      if (!res.ok){
-        if (res.status === 404) throw new Error('ម្ចាស់ហាងមិនទាន់បើក Coupon endpoint នៅ Server ទេ');
-        throw new Error(data.error || `Server error (${res.status})`);
-      }
-      const newPrice = data.price ?? data.new_price ?? data.final_price;
-      if (newPrice === undefined) throw new Error(data.error || 'Server មិនបានឆ្លើយតម្លៃថ្មីមកទេ');
-      appliedCoupon = code;
-      const oldEl = document.getElementById('coPriceOld');
-      oldEl.textContent = '$' + quote.price; oldEl.style.display = '';
-      document.getElementById('coPriceMain').textContent = '$' + newPrice;
-      quote.price = newPrice;
-      msg.textContent = `បញ្ចុះតម្លៃដោយជោគជ័យ${data.message ? ' — ' + data.message : ''}`;
-      msg.className = 'coupon-msg ok';
-    }catch(e){
-      msg.textContent = e.message || 'កូដមិនត្រឹមត្រូវ ឬផុតកំណត់';
-      msg.className = 'coupon-msg err';
-    }
-  };
+    if state == "bulk_add":
+        category = context.user_data.get("bulk_category", "Fruit")
+        added, errors = [], []
+        for i, line in enumerate(text.splitlines(), start=1):
+            line = line.strip()
+            if not line:
+                continue
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) < 2:
+                errors.append(f"បន្ទាត់ {i}: '{line}' — ខ្វះ Comma (ត្រូវការ ឈ្មោះ, តម្លៃ, ស្តុក)")
+                continue
+            name = parts[0]
+            try:
+                price = float(parts[1])
+                qty = int(parts[2]) if len(parts) > 2 and parts[2] else 1
+            except ValueError:
+                errors.append(f"បន្ទាត់ {i}: '{line}' — តម្លៃ/ស្តុកមិនមែនជាលេខ")
+                continue
+            item_id = db.add_item(category, name, price, "", None, "", qty)
+            added.append(f"#{item_id} {name}")
+        context.user_data.clear()
+        reply = f"✅ បានបន្ថែម {len(added)} មុខ ចូល {category}:\n" + "\n".join(added) if added else "គ្មានទំនិញត្រូវបានបន្ថែមទេ។"
+        if errors:
+            reply += "\n\n⚠️ បញ្ហា:\n" + "\n".join(errors)
+        return await update.message.reply_text(reply)
 
-  const fileInput = document.getElementById('paymentFile');
-  const label = document.getElementById('uploadLabel');
-  const submitBtn = document.getElementById('submitOrderBtn');
-  fileInput.onchange = ()=>{
-    if (fileInput.files.length){
-      label.classList.add('has-file'); label.firstChild.textContent = fileInput.files[0].name;
-      submitBtn.disabled = false; haptic();
-    }
-  };
-  document.getElementById('cancelCheckoutBtn').onclick = ()=> document.getElementById('paymentBackBtn').click();
-  submitBtn.onclick = async ()=>{
-    haptic(); submitBtn.disabled = true; submitBtn.textContent = 'កំពុងផ្ញើ...';
-    const fd = new FormData();
-    fd.append('init_data', initData); fd.append('item_id', it.id); fd.append('photo', fileInput.files[0]);
-    // Pass the md5 of the KHQR shown above (if any) so the backend can poll Bakong for
-    // *this exact* bill and auto-approve the moment it's actually paid.
-    if (quote.khqr_md5) fd.append('khqr_md5', quote.khqr_md5);
-    if (appliedCoupon) fd.append('coupon_code', appliedCoupon);
-    try{
-      const res = await fetch('/api/order/submit', {method:'POST', body: fd});
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'failed');
-      renderWaitingStage(data.order_id, initData);
-    }catch(e){
-      submitBtn.disabled = false; submitBtn.textContent = 'ផ្ញើ Screenshot បញ្ជាក់';
-      alert('មានបញ្ហា សូមសាកល្បងម្តងទៀត');
-    }
-  };
-}
 
-function renderWaitingStage(orderId, initData){
-  if (window._qrTimer) clearInterval(window._qrTimer);
-  coStage(`<div class="co"><div class="co-spin"></div><div class="co-title">រង់ចាំម្ចាស់ហាងផ្ទៀងផ្ទាត់</div>
-    <div class="co-sub">Order #${orderId} — ជាធម្មតាមិនយូរទេ សូមមេត្តារង់ចាំ</div></div>`);
-  if (window._pollTimer) clearInterval(window._pollTimer);
-  // Polling this endpoint is also what triggers the backend's Bakong auto-verify check
-  // (see api_order_status) - so this loop is what makes auto-confirm actually happen.
-  window._pollTimer = setInterval(async ()=>{
-    try{
-      const res = await fetch(`/api/order/${orderId}/status?init_data=${encodeURIComponent(initData)}`);
-      const data = await res.json();
-      if (data.status === 'approved'){ clearInterval(window._pollTimer); haptic(); renderApprovedStage(data, initData); }
-      else if (data.status === 'rejected'){ clearInterval(window._pollTimer); renderRejectedStage(); }
-    }catch(e){ /* keep polling */ }
-  }, 3000);
-}
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    state = context.user_data.get("state")
+    if not state or not is_admin(update):
+        return
+    file_id = update.message.photo[-1].file_id
 
-function renderApprovedStage(data, initData){
-  const hasInfo = data.delivery_info && data.delivery_info.trim();
-  const videoUrl = document.body.dataset.loginVideo || '';
-  coStage(`
-    <div class="co">
-      <div class="co-title">ការទូទាត់ត្រូវបានអនុម័ត!</div>
-      <div class="co-sub">${data.item_name} — សូមអរគុណដែលទិញនៅ Uchiro Store</div>
-      ${hasInfo ? `<div class="co-delivery" id="deliveryText">${formatDeliveryText(data.delivery_info)}</div>
-        <button class="co-copybtn" id="copyDeliveryBtn">Copy</button>
-        ${data.has_totp ? `<button class="co-refreshbtn" id="refreshCodeBtn">Refresh Code</button>` : ''}
-        <div class="guide-box">
-          <div class="guide-title">របៀប Login + ដំឡើង App</div>
-          <ol class="guide-list">
-            <li>ទាញយកហ្គេម/App ដែលត្រូវការពី <b>App Store</b> (iPhone) ឬ <b>Play Store</b> (Android)</li>
-            ${data.has_totp
-              ? `<li>ទាញយក <b>Google Authenticator</b> ឬ <b>Authy</b> ពី App Store / Play Store</li>
-                 <li>Login គណនីខាងលើដោយប្រើ Username/Password</li>
-                 <li>ពេលវាសួរកូដសុវត្ថិភាព (2FA) បើក Authenticator App មើលលេខ 6ខ្ទង់ រួចវាយបញ្ចូល — លេខផ្លាស់រៀងរាល់ 30 វិនាទី ប្រើប៊ូតុង <b>Refresh Code</b> ខាងលើប្រសិនបើផុតកំណត់</li>`
-              : `<li>Login ដោយប្រើ Username/Password ខាងលើ</li>`}
-            <li>បើមានបញ្ហា Login សូមចុច ទាក់ទង Admin ខាងក្រោម</li>
-          </ol>
-        </div>
-        <div class="guide-video-box">
-          <div class="guide-title">វីដេអូបង្ហាញជាក់ស្តែង</div>
-          ${videoUrl ? `<video class="guide-video" controls playsinline src="${videoUrl}"></video>` : `<div class="guide-video-empty">វីដេអូនឹងបន្ថែមឆាប់ៗនេះ</div>`}
-        </div>`
-        : `<div class="co-note">ម្ចាស់ហាងនឹងផ្ញើព័ត៌មានឲ្យអ្នកឆាប់ៗនេះតាម Telegram Chat</div>`}
-      <button class="co-btn primary" id="finishOrderBtn">រួចរាល់</button>
-    </div>`);
-  document.getElementById('finishOrderBtn').onclick = finishOrder;
-  if (hasInfo){
-    document.getElementById('copyDeliveryBtn').onclick = ()=>{
-      navigator.clipboard.writeText(document.getElementById('deliveryText').innerText);
-      haptic();
-    };
-  }
-  if (data.has_totp){
-    document.getElementById('refreshCodeBtn').onclick = async ()=>{
-      haptic();
-      try{
-        const res = await fetch(`/api/order/${data.order_id}/refresh-code?init_data=${encodeURIComponent(initData)}`);
-        const j = await res.json();
-        if (j.code){
-          // Swap only the last 6-digit <code> block (the live code line) rather than
-          // re-rendering the whole card, so the setup instructions above stay put.
-          const codeEls = document.querySelectorAll('#deliveryText code');
-          if (codeEls.length) codeEls[codeEls.length - 1].textContent = j.code;
-        }
-      }catch(e){ /* ignore, button stays clickable to retry */ }
-    };
-  }
-}
+    if state == "add_photo":
+        path = await save_telegram_photo(context.bot, file_id, "items")
+        item = context.user_data["new_item"]
+        item["photo_path"] = path
+        context.user_data["state"] = None
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ រក្សាទុក", callback_data="save_item"),
+                                     InlineKeyboardButton("❌ បោះបង់", callback_data="cancel_item")]])
+        with open(path, "rb") as f:
+            return await update.message.reply_photo(f, caption=caption_of(item), reply_markup=kb)
 
-function renderRejectedStage(){
-  if (window._qrTimer) clearInterval(window._qrTimer);
-  coStage(`
-    <div class="co">
-      <div class="co-title">ការទូទាត់មិនត្រូវបានអនុម័តទេ</div>
-      <div class="co-sub">សូមទាក់ទងម្ចាស់ហាងផ្ទាល់ដើម្បីពិនិត្យ</div>
-      <a class="co-btn primary" style="display:block; text-decoration:none; box-sizing:border-box;" href="https://t.me/{{ admin_username }}" target="_blank">ទាក់ទង Admin</a>
-    </div>`);
-}
+    if state == "edit_value" and context.user_data.get("edit_field") == "photo":
+        path = await save_telegram_photo(context.bot, file_id, "items")
+        return await apply_edit(update, context, path)
 
-buildFX_noop();
-function buildFX_noop(){ /* decorative fx intentionally minimal — see .fx / .glow in CSS */ }
-loadItems();
-</script>
+    if state == "await_qr":
+        path = await save_telegram_photo(context.bot, file_id, "settings")
+        db.set_setting("qr_photo_path", path)
+        context.user_data["state"] = "await_payment_note"
+        return await update.message.reply_text(
+            "✅ បាន Save QR។ សូមវាយព័ត៌មានទូទាត់ (ឧ. ABA: 000 111 222 - NAME) — វាយ - បើមិនចង់ដាក់:"
+        )
 
-<!-- ===== NEW: Hot Products carousel logic (fully self-contained, own fetch, own names) ===== -->
-<script>
-(function(){
-  const HOT_ICONS = { 'Account':'👤', 'Fruit':'🍈', 'Gamepass':'🎮', 'Evade':'🏃', 'Robux':'💎', 'Blade Ball':'⚔️', 'MM2':'🔪' };
 
-  function hotCardHTML(it){
-    const bg = it.photo_url ? `style="background-image:url('${it.photo_url}')"` : '';
-    const ph = it.photo_url ? '' : `<div class="hot-ph">${HOT_ICONS[it.category] || '📦'}</div>`;
-    return `<div class="hot-card" data-id="${it.id}">
-      <div class="hot-thumb" ${bg}>
-        <div class="hot-badge">◆ ${it.category || 'Featured'}</div>
-        ${ph}
-      </div>
-      <div class="hot-body">
-        <div class="hot-name">${it.name}</div>
-        <div class="hot-price">$${it.price}</div>
-      </div>
-    </div>`;
-  }
+async def save_item_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not is_admin(update):
+        return await deny(update)
+    await query.answer()
+    if query.data == "cancel_item":
+        context.user_data.clear()
+        return await query.edit_message_caption("បានបោះបង់។")
+    item = context.user_data.get("new_item", {})
+    warranty_days = 14 if item["category"] == "Account" else 0
+    item_id = db.add_item(item["category"], item["name"], item["price"], item["description"],
+                           item["photo_path"], item.get("delivery_info", ""), item["quantity"], warranty_days)
+    if item.get("totp_secret"):
+        db.update_item_field(item_id, "totp_secret", item["totp_secret"])
+    context.user_data.clear()
+    await query.edit_message_caption(f"✅ រក្សាទុករួច! (ID #{item_id})" + (" — 🛡️ Warranty 14ថ្ងៃស្វ័យប្រវត្តិ" if warranty_days else ""))
 
-  function applyHotTilt(track){
-    const rect = track.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    track.querySelectorAll('.hot-card').forEach(card=>{
-      const cRect = card.getBoundingClientRect();
-      const cardCenter = cRect.left + cRect.width / 2;
-      const delta = (cardCenter - centerX) / rect.width;
-      const rotate = Math.max(-22, Math.min(22, delta * -36));
-      const scale = Math.max(0.86, 1 - Math.abs(delta) * 0.16);
-      const translateY = Math.abs(delta) * 14;
-      card.style.transform = `perspective(1000px) rotateY(${rotate}deg) scale(${scale}) translateY(${translateY}px)`;
-      card.style.opacity = String(Math.max(0.45, 1 - Math.abs(delta) * 0.55));
-    });
-  }
 
-  async function initHotCarousel(){
-    const track = document.getElementById('hotTrack');
-    if (!track) return;
-    let items = [];
-    try{
-      const res = await fetch('/api/items');
-      const data = await res.json();
-      items = (data.items || []).slice(0, 10);
-    }catch(e){
-      track.innerHTML = '<div class="hot-empty">មិនអាចផ្ទុកទំនិញបានទេ</div>';
-      return;
-    }
-    if (!items.length){
-      track.innerHTML = '<div class="hot-empty">មិនទាន់មានទំនិញនៅឡើយទេ</div>';
-      return;
-    }
-    track.innerHTML = items.map(hotCardHTML).join('');
-    track.querySelectorAll('.hot-card').forEach(card=>{
-      card.addEventListener('click', ()=>{
-        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-        const id = card.dataset.id;
-        const match = items.find(it => String(it.id) === String(id));
-        if (match && typeof openProductPage === 'function') openProductPage(match, 'home');
-      });
-    });
+# ---- list / edit / delete ----
 
-    let ticking = false;
-    track.addEventListener('scroll', ()=>{
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(()=>{ applyHotTilt(track); ticking = false; });
-    });
-    applyHotTilt(track);
+async def listitems(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    items = db.get_all_items()
+    if not items:
+        return await update.message.reply_text("មិនទាន់មានទំនិញ។ ប្រើ /additem")
+    for it in items:
+        status = "🟢" if it["active"] and it["quantity"] > 0 else "🔴"
+        draft_tag = " 📝Draft" if not it["published"] else ""
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ កែប្រែ", callback_data=f"edit_{it['id']}"),
+                                     InlineKeyboardButton("🗑 លុប", callback_data=f"del_{it['id']}")]])
+        caption = f"{status}{draft_tag} {caption_of(it, it['id'])}"
+        if it["photo_file_id"] and os.path.exists(it["photo_file_id"]):
+            with open(it["photo_file_id"], "rb") as f:
+                await update.message.reply_photo(f, caption=caption, reply_markup=kb)
+        else:
+            await update.message.reply_text(caption, reply_markup=kb)
 
-    const prevBtn = document.getElementById('hotPrevBtn');
-    const nextBtn = document.getElementById('hotNextBtn');
-    function step(dir){
-      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-      const card = track.querySelector('.hot-card');
-      const gap = 14;
-      const width = card ? card.getBoundingClientRect().width + gap : 200;
-      track.scrollBy({ left: dir * width, behavior: 'smooth' });
-    }
-    if (prevBtn) prevBtn.onclick = ()=> step(-1);
-    if (nextBtn) nextBtn.onclick = ()=> step(1);
 
-    window.addEventListener('resize', ()=> applyHotTilt(track));
-  }
+async def delete_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not is_admin(update):
+        return await deny(update)
+    await query.answer()
+    item_id = int(query.data.split("_")[1])
+    db.delete_item(item_id)
+    await query.message.reply_text(f"🗑 បានលុប #{item_id}")
 
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', initHotCarousel);
-  } else {
-    initHotCarousel();
-  }
-})();
-</script>
 
-<!-- ===== Premium Emoji Auto-Loader ===== -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
-<style>
-.premium-emoji{ width:1.2em; height:1.2em; display:inline-block; vertical-align:-0.2em; object-fit:contain; }
-.lottie-emoji{ width:1.2em; height:1.2em; display:inline-block; vertical-align:-0.2em; }
-</style>
-<script>
-let PREMIUM_EMOJI_MAP = null;
-let PREMIUM_EMOJI_PATTERN = null;
+async def edit_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not is_admin(update):
+        return await deny(update)
+    await query.answer()
+    item_id = int(query.data.split("_")[1])
+    context.user_data["edit_item_id"] = item_id
+    kb = [[InlineKeyboardButton(f, callback_data=f"field_{f}")] for f in EDITABLE_FIELDS]
+    await query.message.reply_text("កែផ្នែកណា?", reply_markup=InlineKeyboardMarkup(kb))
 
-function replaceEmojisIn(root){
-  if (!PREMIUM_EMOJI_MAP) return;
 
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode:(node)=>{
-      const tag = node.parentNode && node.parentNode.nodeName;
-      if (tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
-      if (node.parentNode && node.parentNode.classList && node.parentNode.classList.contains('premium-emoji-done')) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    }
-  });
-  const textNodes = [];
-  while (walker.nextNode()) textNodes.push(walker.currentNode);
+async def edit_field_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not is_admin(update):
+        return await deny(update)
+    await query.answer()
+    field = query.data.split("_", 1)[1]
+    context.user_data["edit_field"] = field
+    context.user_data["state"] = "edit_value"
+    prompt = "ផ្ញើរូបភាពថ្មី:" if field == "photo" else \
+        ("វាយ 1 ដើម្បីបើក ឬ 0 ដើម្បីបិទ:" if field == "active" else f"វាយតម្លៃថ្មីសម្រាប់ {field}:")
+    await query.message.reply_text(prompt)
 
-  textNodes.forEach(node=>{
-    const text = node.nodeValue;
-    PREMIUM_EMOJI_PATTERN.lastIndex = 0;
-    if (!PREMIUM_EMOJI_PATTERN.test(text)) return;
-    PREMIUM_EMOJI_PATTERN.lastIndex = 0;
 
-    const frag = document.createDocumentFragment();
-    let lastIndex = 0, match;
-    while ((match = PREMIUM_EMOJI_PATTERN.exec(text)) !== null){
-      const before = text.slice(lastIndex, match.index);
-      if (before) frag.appendChild(document.createTextNode(before));
+async def apply_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, raw_value):
+    item_id = context.user_data.get("edit_item_id")
+    field = context.user_data.get("edit_field")
+    if item_id is None or field is None:
+        return
+    db_field = "photo_file_id" if field == "photo" else field
+    value = raw_value
+    try:
+        if field == "price":
+            value = float(raw_value)
+        elif field in ("quantity", "active", "warranty_days", "published"):
+            value = int(raw_value)
+    except ValueError:
+        return await update.message.reply_text("សូមវាយជាលេខ:")
+    db.update_item_field(item_id, db_field, value)
+    context.user_data["state"] = None
+    context.user_data.pop("edit_item_id", None)
+    context.user_data.pop("edit_field", None)
+    await update.message.reply_text(f"✅ បានកែ {field} របស់ #{item_id}")
 
-      const filename = PREMIUM_EMOJI_MAP[match[0]];
-      const ext = filename.split('.').pop();
-      let el;
-      if (ext === 'webm'){
-        el = document.createElement('video');
-        el.src = `assets/emojis/${filename}`;
-        el.autoplay = true; el.loop = true; el.muted = true; el.playsInline = true;
-        el.className = 'premium-emoji';
-      } else if (ext === 'json'){
-        el = document.createElement('span');
-        el.className = 'lottie-emoji';
-        el.dataset.src = `assets/emojis/${filename}`;
-      } else {
-        el = document.createElement('img');
-        el.src = `assets/emojis/${filename}`;
-        el.alt = match[0];
-        el.className = 'premium-emoji';
-      }
-      frag.appendChild(el);
-      lastIndex = PREMIUM_EMOJI_PATTERN.lastIndex;
-    }
-    const after = text.slice(lastIndex);
-    if (after) frag.appendChild(document.createTextNode(after));
-    node.parentNode.replaceChild(frag, node);
-  });
 
-  if (window.lottie){
-    root.querySelectorAll ? root.querySelectorAll('.lottie-emoji').forEach(el=>{
-      if (el.dataset.inited) return;
-      el.dataset.inited = '1';
-      lottie.loadAnimation({ container: el, path: el.dataset.src, renderer:'svg', loop:true, autoplay:true });
-    }) : null;
-  }
-}
+# ---- coupons ----
 
-async function loadPremiumEmojis(){
-  try{
-    const res = await fetch('assets/emoji-files.json');
-    PREMIUM_EMOJI_MAP = await res.json();
-  }catch(e){ return; }
+async def addcoupon(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    args = context.args
+    if len(args) != 4 or args[1] not in ("percent", "fixed"):
+        return await update.message.reply_text(
+            "ប្រើ: /addcoupon <code> <percent|fixed> <amount> <max_uses>\n"
+            "ឧ. /addcoupon SAVE20 percent 20 10  (20% off, ប្រើបានអតិបរមា 10ដង, ១ដងក្នុងម្នាក់)\n"
+            "ឧ. /addcoupon FLAT5 fixed 5 1  ($5 off, ប្រើបានតែ 1ដងសរុប)"
+        )
+    try:
+        amount = float(args[2])
+        max_uses = int(args[3])
+    except ValueError:
+        return await update.message.reply_text("Amount/Max uses ត្រូវជាលេខ")
+    code = db.add_coupon(args[0], args[1], amount, max_uses)
+    unit = "%" if args[1] == "percent" else CURRENCY
+    await update.message.reply_text(
+        f"✅ បាន Save Coupon: {code}\n{amount}{unit} off, អតិបរមា {max_uses}ដងសរុប, 1ដងក្នុងម្នាក់ស្វ័យប្រវត្តិ"
+    )
 
-  const emojiChars = Object.keys(PREMIUM_EMOJI_MAP).sort((a,b)=>b.length-a.length);
-  if (emojiChars.length === 0) return;
-  PREMIUM_EMOJI_PATTERN = new RegExp(emojiChars.map(e=>e.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'g');
 
-  // ជំនួស emoji ដែលមានស្រាប់ពេល page load
-  replaceEmojisIn(document.body);
+async def listcoupons_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    coupons = db.list_coupons()
+    if not coupons:
+        return await update.message.reply_text("មិនទាន់មាន Coupon ទេ។ ប្រើ /addcoupon")
+    lines = []
+    for c in coupons:
+        unit = "%" if c["discount_type"] == "percent" else CURRENCY
+        status = "🟢" if c["active"] else "🔴"
+        lines.append(f"{status} {c['code']} — {c['amount']}{unit} off ({c['used_count']}/{c['max_uses']} ប្រើ)")
+    await update.message.reply_text("🏷️ Coupon ទាំងអស់:\n\n" + "\n".join(lines))
 
-  // ជំនួស emoji ថ្មីៗដែលបង្កើតដោយ JS ក្រោយមក (cards, orders, checkout stages, ...)
-  const observer = new MutationObserver(mutations=>{
-    for (const m of mutations){
-      m.addedNodes.forEach(node=>{
-        if (node.nodeType === 1 || node.nodeType === 3){
-          replaceEmojisIn(node.nodeType === 1 ? node : node.parentNode);
-        }
-      });
-    }
-  });
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true });
-}
-document.addEventListener('DOMContentLoaded', loadPremiumEmojis);
-</script>
-</body>
-</html>
+
+async def disablecoupon_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    if not context.args:
+        return await update.message.reply_text("ប្រើ: /disablecoupon <code>")
+    db.disable_coupon(context.args[0])
+    await update.message.reply_text(f"✅ បានបិទ Coupon {context.args[0].upper()}")
+
+
+# ---- draft / release ----
+
+async def release_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    drafts = db.get_draft_items()
+    if not drafts:
+        return await update.message.reply_text("គ្មានទំនិញថ្មីរង់ចាំ Release ទេ (ទំនិញទាំងអស់ Publish រួចហើយ)។")
+    released = db.release_all_drafts()
+    lines = [f"#{it['id']} {it['name']} ({it['category']})" for it in released]
+    await update.message.reply_text(f"🚀 បាន Publish {len(released)} មុខភ្លាមៗ:\n\n" + "\n".join(lines))
+
+
+async def drafts_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    drafts = db.get_draft_items()
+    if not drafts:
+        return await update.message.reply_text("គ្មានទំនិញនៅជា Draft ទេ។")
+    lines = [f"#{it['id']} {it['name']} ({it['category']}) — {format_price(it['price'], CURRENCY)}" for it in drafts]
+    await update.message.reply_text(
+        f"📝 ទំនិញនៅជា Draft ({len(drafts)}) — មិនទាន់មានអតិថិជនឃើញទេ:\n\n" + "\n".join(lines) +
+        "\n\nវាយ /release ដើម្បី Publish ទាំងអស់ម្តងតែម្តង"
+    )
+
+
+# ---- spin wheel (free - unlocked after buying an Account) ----
+
+async def addspin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    if len(context.args) < 2:
+        return await update.message.reply_text(
+            "ប្រើ: /addspin <ឈ្មោះ> <weight>\n"
+            "ឧ. /addspin Buddha 80\n/addspin Kitsune 2\n\n"
+            "weight មិនចាំបាច់បូកបាន 100 ទេ — ប្រព័ន្ធគណនា % ដោយស្វ័យប្រវត្តិពី weight ធៀបនឹងផលបូកទាំងអស់"
+        )
+    name = " ".join(context.args[:-1])
+    try:
+        weight = float(context.args[-1])
+    except ValueError:
+        return await update.message.reply_text("weight ត្រូវជាលេខ")
+    db.add_spin_item(name, weight)
+    pool = db.list_spin_items()
+    total = sum(p["weight"] for p in pool)
+    pct = weight / total * 100 if total else 0
+    await update.message.reply_text(f"✅ បានបន្ថែម {name} ចូល Spin Pool (≈{pct:.1f}%)")
+
+
+async def listspins_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    pool = db.list_spin_items()
+    if not pool:
+        return await update.message.reply_text("Spin Pool ទទេ។ ប្រើ /addspin")
+    total = sum(p["weight"] for p in pool)
+    lines = [f"#{p['id']} {p['name']} — {p['weight']/total*100:.1f}%" for p in pool]
+    await update.message.reply_text("🎡 Spin Pool ($0 ឥតគិតថ្លៃ, Unlock ក្រោយទិញ Account):\n\n" + "\n".join(lines))
+
+
+async def removespin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    if not context.args or not context.args[0].isdigit():
+        return await update.message.reply_text("ប្រើ: /removespin <id>")
+    db.remove_spin_item(int(context.args[0]))
+    await update.message.reply_text("✅ បានលុប")
+
+
+async def spinclaims_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    pending = db.get_pending_spin_wins()
+    if not pending:
+        return await update.message.reply_text("គ្មាន Spin Win កំពុងរង់ចាំប្រគល់ជូនទេ។")
+    for w in pending:
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ ប្រគល់ជូនរួច", callback_data=f"spindeliver_{w['id']}")]])
+        await update.message.reply_text(
+            f"🎉 Win #{w['id']}\n👤 @{w['username'] or 'N/A'} (id: {w['chat_id']})\n"
+            f"🎁 {w['reward_name']}\n🕐 {w['created_at']}", reply_markup=kb
+        )
+
+
+async def spindeliver_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not is_admin(update):
+        return await deny(update)
+    await query.answer()
+    win_id = int(query.data.split("_")[1])
+    db.mark_spin_delivered(win_id)
+    await query.edit_message_text(query.message.text + "\n\n✅ ប្រគល់ជូនរួច")
+
+
+# ---- orders ----
+
+async def orderhistory_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    orders = db.get_recent_orders(20)
+    if not orders:
+        return await update.message.reply_text("មិនទាន់មាន Order ណាទេ។")
+    icon = {"pending": "⏳", "approved": "✅", "rejected": "❌"}
+    lines = []
+    for o in orders:
+        lines.append(f"{icon.get(o['status'], '•')} #{o['id']} {o['item_name']} — @{o['buyer_username'] or 'N/A'} ({o['created_at']})")
+    await update.message.reply_text("🧾 Order ថ្មីៗ (20):\n\n" + "\n".join(lines))
+
+
+async def orders_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    pending = db.get_orders_by_status("pending")
+    if not pending:
+        return await update.message.reply_text("មិនមាន Order កំពុងរង់ចាំ។")
+    for order in pending:
+        item = db.get_item(order["item_id"])
+        caption = (f"🧾 Order #{order['id']}\n👤 @{order['buyer_username'] or 'N/A'} ({order['buyer_chat_id']})\n"
+                   f"📦 {item['name'] if item else 'N/A'}\n💵 {format_price(item['price'], CURRENCY) if item else '?'}")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ អនុម័ត", callback_data=f"appr_{order['id']}"),
+                                     InlineKeyboardButton("❌ បដិសេធ", callback_data=f"rej_{order['id']}")]])
+        if order["payment_photo_file_id"] and os.path.exists(order["payment_photo_file_id"]):
+            with open(order["payment_photo_file_id"], "rb") as f:
+                await update.message.reply_photo(f, caption=caption, reply_markup=kb)
+        else:
+            await update.message.reply_text(caption, reply_markup=kb)
+
+
+async def order_decision_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not is_admin(update):
+        return await deny(update)
+    await query.answer()
+    action, order_id = query.data.split("_")
+    order_id = int(order_id)
+    order = db.get_order(order_id)
+    if not order or order["status"] != "pending":
+        return await query.message.reply_text("Order នេះដោះស្រាយរួចហើយ។")
+
+    item = db.get_item(order["item_id"])
+    store_bot = Bot(token=STORE_BOT_TOKEN)
+
+    if action == "appr":
+        db.set_order_approved(order_id)
+        db.decrement_stock(order["item_id"])
+        msg = f"🎉 ការទូទាត់សម្រាប់ {item['name']} ត្រូវបានអនុម័ត! អរគុណដែលទិញនៅ Uchiro Store 🇰🇭"
+        msg += "\n\n" + build_delivery_message(item)
+        if item["category"] == "Account":
+            db.grant_spin_credit(order["buyer_chat_id"], 1)
+            msg += "\n\n🎡 អ្នកទទួលបាន Spin ឥតគិតថ្លៃ 1 ដង! វាយ /spin ដើម្បីលេង"
+        try:
+            await store_bot.send_message(order["buyer_chat_id"], msg, parse_mode="Markdown")
+        except Exception:
+            await store_bot.send_message(order["buyer_chat_id"], msg)  # fallback if item name breaks Markdown
+        await query.message.reply_text(f"✅ អនុម័ត #{order_id}")
+    else:
+        db.update_order_status(order_id, "rejected")
+        await store_bot.send_message(order["buyer_chat_id"],
+                                      f"❌ ការទូទាត់សម្រាប់ {item['name'] if item else ''} មិនត្រូវបានអនុម័តទេ។ សូមទាក់ទងម្ចាស់ហាង។")
+        await query.message.reply_text(f"❌ បដិសេធ #{order_id}")
+
+
+# ---- payment QR ----
+
+async def setpayment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    context.user_data["state"] = "await_qr"
+    await update.message.reply_text("សូមផ្ញើរូបភាព QR Code សម្រាប់ទូទាត់:")
+
+
+async def setkhqr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    text = " ".join(context.args)
+    parts = [p.strip() for p in text.split("|")]
+    if len(parts) < 1 or not parts[0]:
+        return await update.message.reply_text(
+            "ប្រើ: /setkhqr account_id | ឈ្មោះហាង | ក្រុង\n"
+            "ឧ. /setkhqr sovan_noreakyout@wing | Uchiro Store | Phnom Penh\n\n"
+            "account_id យកពី App ធនាគាររបស់អ្នក (ផ្នែក KHQR/My QR)"
+        )
+    db.set_setting("khqr_account_id", parts[0])
+    db.set_setting("khqr_merchant_name", parts[1] if len(parts) > 1 and parts[1] else "Uchiro Store")
+    db.set_setting("khqr_merchant_city", parts[2] if len(parts) > 2 and parts[2] else "Phnom Penh")
+    await update.message.reply_text(
+        f"✅ បាន Save KHQR!\naccount_id: {parts[0]}\n\n"
+        "ចាប់ពីពេលនេះទៅ រាល់ការទិញនឹងបង្ហាញ QR ជាមួយតម្លៃពិតដោយស្វ័យប្រវត្តិ។ សាកល្បងចុច 'ទិញឥឡូវ' លើ Store Bot ដើម្បីផ្ទៀងផ្ទាត់។"
+    )
+
+
+async def showkhqr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    account_id = db.get_setting("khqr_account_id")
+    if not account_id:
+        return await update.message.reply_text("មិនទាន់កំណត់ KHQR ទេ។ ប្រើ /setkhqr")
+    from utils import generate_khqr_image
+    path = generate_khqr_image(account_id, db.get_setting("khqr_merchant_name", "Uchiro Store"),
+                                db.get_setting("khqr_merchant_city", "Phnom Penh"), 1.00, "TEST")
+    if not path:
+        return await update.message.reply_text(
+            "⚠️ មិនអាចបង្កើត KHQR បានទេ (library មិនទាន់ដំឡើង ឬ account_id មិនត្រឹមត្រូវ)។ "
+            "Bot នឹងប្រើ QR ស្តាទិចធម្មតា (/setpayment) ជំនួសវិញដោយស្វ័យប្រវត្តិ។"
+        )
+    with open(path, "rb") as f:
+        await update.message.reply_photo(f, caption=f"KHQR សាកល្បង ($1.00)\naccount_id: {account_id}")
+
+
+async def showpayment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    qr = db.get_setting("qr_photo_path")
+    note = db.get_setting("payment_note", "")
+    if not qr or not os.path.exists(qr):
+        return await update.message.reply_text("មិនទាន់កំណត់ QR ទេ។ ប្រើ /setpayment")
+    with open(qr, "rb") as f:
+        await update.message.reply_photo(f, caption=note or "QR ទូទាត់បច្ចុប្បន្ន")
+
+
+# ---- stats ----
+
+async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    total_users = db.count_users()
+    total_items = len(db.get_all_items())
+    orders = db.count_orders_by_status()
+    text = (
+        "📊 ស្ថិតិហាង\n\n"
+        f"👥 អ្នកប្រើប្រាស់សរុប (ធ្លាប់ចូល Store Bot): {total_users}\n"
+        f"📦 ទំនិញសរុបក្នុងស្តុក: {total_items}\n\n"
+        f"🧾 Order កំពុងរង់ចាំ: {orders.get('pending', 0)}\n"
+        f"✅ Order អនុម័តរួច: {orders.get('approved', 0)}\n"
+        f"❌ Order បដិសេធ: {orders.get('rejected', 0)}"
+    )
+    await update.message.reply_text(text, entities=entities_for(text))
+
+
+async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    users = db.list_users(30)
+    if not users:
+        return await update.message.reply_text("មិនទាន់មានអ្នកប្រើប្រាស់ទេ។")
+    lines = [f"@{u['username'] or 'N/A'} (id: {u['chat_id']}) — ចុងក្រោយ {u['last_seen']}" for u in users]
+    await update.message.reply_text(f"👥 អ្នកប្រើប្រាស់ចុងក្រោយ ({db.count_users()} សរុប):\n\n" + "\n".join(lines))
+
+
+# ---- seller management (owner only) ----
+
+async def addseller(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update):
+        return await deny(update)
+    if not context.args or not context.args[0].isdigit():
+        return await update.message.reply_text("ប្រើ: /addseller <chat_id>")
+    chat_id = int(context.args[0])
+    db.add_seller(chat_id)
+    await update.message.reply_text(f"✅ បានបន្ថែម Admin: {chat_id}")
+
+
+async def removeseller(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update):
+        return await deny(update)
+    if not context.args or not context.args[0].isdigit():
+        return await update.message.reply_text("ប្រើ: /removeseller <chat_id>")
+    chat_id = int(context.args[0])
+    db.remove_seller(chat_id)
+    await update.message.reply_text(f"✅ បានលុប Admin: {chat_id}")
+
+
+async def sellers_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        return await deny(update)
+    from config import OWNER_IDS
+    lines = [f"👑 Owner: {oid}" for oid in OWNER_IDS]
+    lines += [f"🧑‍💼 Admin: {s['chat_id']}" for s in db.list_sellers()]
+    await update.message.reply_text("\n".join(lines) or "មិនមាន Admin ណាទេ។")
+
+
+# ---- error handler ----
+
+async def on_error(update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error("Admin bot error", exc_info=context.error)
+    try:
+        if isinstance(update, Update) and update.effective_chat:
+            await context.bot.send_message(update.effective_chat.id, "⚠️ មានបញ្ហាបច្ចេកទេស សូមព្យាយាមម្តងទៀត។")
+    except Exception:
+        pass
+
+
+# ---- build ----
+
+def build_app():
+    app = Application.builder().token(ADMIN_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("additem", additem))
+    app.add_handler(CommandHandler("addstock", addstock))
+    app.add_handler(CommandHandler("addfruit", addfruit))
+    app.add_handler(CommandHandler("addgamepass", addgamepass))
+    app.add_handler(CommandHandler("setstock", setstock))
+    app.add_handler(CommandHandler("setprice", setprice))
+    app.add_handler(CommandHandler("cancel", cancel_state))
+    app.add_handler(CommandHandler("setcodes", setcodes))
+    app.add_handler(CommandHandler("settierlist", settierlist))
+    app.add_handler(CommandHandler("setrules", setrules))
+    app.add_handler(CommandHandler("findemoji", findemoji))
+    app.add_handler(CommandHandler("panel", panel_cmd))
+    app.add_handler(CommandHandler("addcoupon", addcoupon))
+    app.add_handler(CommandHandler("listcoupons", listcoupons_cmd))
+    app.add_handler(CommandHandler("disablecoupon", disablecoupon_cmd))
+    app.add_handler(CommandHandler("release", release_cmd))
+    app.add_handler(CommandHandler("addspin", addspin))
+    app.add_handler(CommandHandler("listspins", listspins_cmd))
+    app.add_handler(CommandHandler("removespin", removespin))
+    app.add_handler(CommandHandler("spinclaims", spinclaims_cmd))
+    app.add_handler(CommandHandler("drafts", drafts_cmd))
+    app.add_handler(CommandHandler("addguide", addguide))
+    app.add_handler(CommandHandler("removeguide", removeguide))
+    app.add_handler(CommandHandler("guides", guides_cmd))
+    app.add_handler(CommandHandler("listitems", listitems))
+    app.add_handler(CommandHandler("orders", orders_cmd))
+    app.add_handler(CommandHandler("orderhistory", orderhistory_cmd))
+    app.add_handler(CommandHandler("addseller", addseller))
+    app.add_handler(CommandHandler("removeseller", removeseller))
+    app.add_handler(CommandHandler("sellers", sellers_cmd))
+    app.add_handler(CommandHandler("setpayment", setpayment))
+    app.add_handler(CommandHandler("setkhqr", setkhqr))
+    app.add_handler(CommandHandler("showkhqr", showkhqr))
+    app.add_handler(CommandHandler("showpayment", showpayment))
+    app.add_handler(CommandHandler("stats", stats_cmd))
+    app.add_handler(CommandHandler("users", users_cmd))
+
+    app.add_handler(CallbackQueryHandler(newcat_cb, pattern=r"^newcat_"))
+    app.add_handler(CallbackQueryHandler(bulkcat_cb, pattern=r"^bulkcat_"))
+    app.add_handler(CallbackQueryHandler(save_item_cb, pattern=r"^(save_item|cancel_item)$"))
+    app.add_handler(CallbackQueryHandler(edit_start_cb, pattern=r"^edit_\d+$"))
+    app.add_handler(CallbackQueryHandler(edit_field_cb, pattern=r"^field_"))
+    app.add_handler(CallbackQueryHandler(delete_cb, pattern=r"^del_\d+$"))
+    app.add_handler(CallbackQueryHandler(order_decision_cb, pattern=r"^(appr|rej)_\d+$"))
+    app.add_handler(CallbackQueryHandler(spindeliver_cb, pattern=r"^spindeliver_\d+$"))
+
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_error_handler(on_error)
+    return app
+
+
+if __name__ == "__main__":
+    db.init_db()
+    build_app().run_polling()
