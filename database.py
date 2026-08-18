@@ -1,7 +1,22 @@
+import logging
+import os
 import sqlite3
 from contextlib import contextmanager
 from premium_emoji import entities_for
 from config import DB_PATH, OWNER_IDS
+
+logger = logging.getLogger(__name__)
+
+# One-time database reset switch. Set the RESET_DB=1 environment variable and
+# restart the service to wipe the existing (stale) database file so a fresh,
+# empty one is created by init_db() on startup. Remove/unset the variable
+# afterwards - leaving it set to 1 would wipe the DB on every restart.
+if os.getenv("RESET_DB") == "1":
+    if os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
+        logger.info(f"RESET_DB=1 - deleted existing database: {DB_PATH}")
+    else:
+        logger.info(f"RESET_DB=1 - no existing database found at {DB_PATH}, nothing to delete")
 
 
 def init_db():
