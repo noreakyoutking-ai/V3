@@ -24,6 +24,20 @@ def start_webapp_server():
     Thread(target=webapp_server.run, kwargs={"port": port}, daemon=True).start()
 
 
+def run_bot_polling(app, bot_name):
+    """Run a bot's polling loop in a dedicated asyncio event loop (separate thread)"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(app.updater.start_polling())
+        logger.info(f"{bot_name} polling started")
+        loop.run_forever()
+    except Exception as e:
+        logger.error(f"{bot_name} polling error: {e}")
+    finally:
+        loop.close()
+
+
 async def main():
     db.init_db()
 
@@ -34,28 +48,44 @@ async def main():
     elif os.getenv("ENABLE_KEEPALIVE") == "1":
         keep_alive()
 
-    apps = [admin_bot.build_app(), store_bot.build_app()]
+    apps = [
+        ("Admin Bot", admin_bot.build_app()),
+        ("Store Bot", store_bot.build_app()),
+    ]
 
     # Helper Bot (Blox Fruits tips bot) is optional - only starts if a real token is set
     helper_token = os.getenv("HELPER_BOT_TOKEN", "")
     if helper_token and "PUT_YOUR" not in helper_token:
         import helper_bot
-        apps.append(helper_bot.build_app())
+        apps.append(("Helper Bot", helper_bot.build_app()))
 
-    for app in apps:
+    # Initialize all apps first
+    for bot_name, app in apps:
         await app.initialize()
         await app.start()
-        await app.updater.start_polling()
 
-    logger.info(f"{len(apps)} Uchiro Store bot(s) running. Press Ctrl+C to stop.")
+    # Start each bot's polling in a separate thread to avoid conflicts
+    polling_threads = []
+    for bot_name, app in apps:
+        thread = Thread(
+            target=run_bot_polling,
+            args=(app, bot_name),
+            daemon=True,
+            name=f"{bot_name}-polling"
+        )
+        thread.start()
+        polling_threads.append(thread)
 
+    logger.info(f"{len(apps)} bot(s) running in separate polling threads. Press Ctrl+C to stop.")
+
+    # Keep the main thread alive
     stop_event = asyncio.Event()
     try:
         await stop_event.wait()
     except (KeyboardInterrupt, asyncio.CancelledError):
-        pass
+        logger.info("Shutting down...")
     finally:
-        for app in apps:
+        for bot_name, app in apps:
             await app.updater.stop()
             await app.stop()
             await app.shutdown()
@@ -63,3 +93,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
