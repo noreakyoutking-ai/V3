@@ -69,30 +69,40 @@
   .hot-title{ text-align:center; font-size:23px; font-weight:800; letter-spacing:.2px; margin:0 0 16px; color:var(--cloud); }
   .hot-title b{ font-weight:800; background:linear-gradient(90deg, var(--coral-1), #ec4899);
     -webkit-background-clip:text; background-clip:text; color:transparent; }
-  .hot-stage{ position:relative; height:300px; perspective:1000px; overflow:visible; }
-  .hot-track{ position:absolute; inset:0; display:flex; align-items:center; gap:14px; overflow-x:auto;
-    scroll-snap-type:x mandatory; scrollbar-width:none; padding:0 30%; }
+  .hot-stage{ position:relative; height:430px; perspective:1400px; overflow:visible; transform-style:preserve-3d; }
+  /* soft grounded shadow beneath the stack — sells the "real" 3D standing-on-a-shelf read */
+  .hot-stage::after{ content:''; position:absolute; left:50%; bottom:2px; transform:translateX(-50%);
+    width:64%; height:26px; background:radial-gradient(ellipse at center, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 75%);
+    filter:blur(3px); z-index:0; pointer-events:none; }
+  .hot-track{ position:absolute; inset:0; display:flex; align-items:center; gap:16px; overflow-x:auto;
+    scroll-snap-type:x mandatory; scrollbar-width:none; padding:0 12%; }
   .hot-track::-webkit-scrollbar{ display:none; }
-  .hot-card{ flex:0 0 62%; max-width:230px; scroll-snap-align:center; height:270px; border-radius:22px;
-    background:linear-gradient(180deg, var(--card), #070511); border:1px solid var(--line); overflow:hidden;
-    display:flex; flex-direction:column; box-shadow:0 20px 40px rgba(0,0,0,.55);
-    transition:transform .12s linear, opacity .12s linear; will-change:transform; cursor:pointer; }
+  .hot-card{ flex:0 0 80%; max-width:320px; scroll-snap-align:center; height:400px; border-radius:28px;
+    background:linear-gradient(180deg, var(--card), #070511); border:1px solid rgba(255,255,255,.10); overflow:hidden;
+    position:relative; display:flex; flex-direction:column;
+    box-shadow:0 30px 60px rgba(0,0,0,.6), 0 8px 18px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.12);
+    transition:transform .35s cubic-bezier(.22,1,.36,1), opacity .3s ease, box-shadow .3s ease;
+    transform-style:preserve-3d; will-change:transform; cursor:pointer; }
+  /* glossy diagonal sheen — sits above the thumb, reinforces the "premium glass" 3D read */
+  .hot-card::before{ content:''; position:absolute; inset:0; z-index:2; pointer-events:none;
+    background:linear-gradient(120deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,0) 26%, rgba(255,255,255,0) 78%, rgba(255,255,255,.08) 100%); }
+  .hot-card.is-pressed{ box-shadow:0 10px 22px rgba(0,0,0,.5), inset 0 2px 10px rgba(0,0,0,.5); }
   .hot-thumb{ flex:1; background-size:cover; background-position:center; position:relative;
     display:flex; align-items:center; justify-content:center; }
-  .hot-thumb .hot-ph{ width:56px; height:56px; border-radius:16px; background:rgba(255,255,255,.08);
-    display:flex; align-items:center; justify-content:center; font-size:26px; }
-  .hot-badge{ position:absolute; top:10px; left:10px; display:inline-flex; align-items:center; gap:4px;
+  .hot-thumb .hot-ph{ width:72px; height:72px; border-radius:20px; background:rgba(255,255,255,.08);
+    display:flex; align-items:center; justify-content:center; font-size:34px; }
+  .hot-badge{ position:absolute; top:12px; left:12px; display:inline-flex; align-items:center; gap:4px;
     background:rgba(8,4,15,.55); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.18);
-    color:#fff; font-size:9.5px; font-weight:700; padding:4px 9px; border-radius:999px; }
-  .hot-body{ padding:12px 14px 14px; background:#0a0714; }
-  .hot-name{ font-size:13.5px; font-weight:700; color:var(--cloud); line-height:1.3;
+    color:#fff; font-size:10.5px; font-weight:700; padding:5px 11px; border-radius:999px; z-index:3; }
+  .hot-body{ padding:16px 18px 18px; background:#0a0714; position:relative; z-index:1; }
+  .hot-name{ font-size:16px; font-weight:800; color:var(--cloud); line-height:1.3;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .hot-price{ margin-top:4px; font-size:16px; font-weight:800; color:var(--gold-1); }
+  .hot-price{ margin-top:5px; font-size:20px; font-weight:800; color:var(--gold-1); }
   .hot-nav{ display:flex; justify-content:center; gap:12px; margin-top:14px; }
   .hot-nav button{ width:38px; height:38px; border-radius:50%; border:1px solid var(--line);
     background:rgba(255,255,255,.04); color:var(--cloud); font-size:16px; cursor:pointer;
-    display:flex; align-items:center; justify-content:center; }
-  .hot-nav button:active{ transform:scale(.92); background:rgba(168,85,247,.18); }
+    display:flex; align-items:center; justify-content:center; transition:transform .15s cubic-bezier(.34,1.56,.64,1), background .15s; }
+  .hot-nav button:active{ transform:scale(.88); background:rgba(168,85,247,.18); }
   .hot-empty{ text-align:center; color:var(--muted); font-size:12.5px; padding:40px 0; }
 
   .page-title{ font-family:'Manrope',sans-serif; letter-spacing:.2px; font-size:19px; padding:20px 0 4px; font-weight:800;
@@ -174,6 +184,41 @@
   .order-status.rejected{ background:rgba(255,90,90,.16); color:var(--danger); }
   .order-meta{ font-size:11px; color:var(--muted); margin-top:6px; }
   .order-warranty{ font-size:11.5px; color:var(--warranty); margin-top:6px; font-weight:600; }
+  .order-warranty.expired{ color:var(--danger); }
+  .order-view-hint{ font-size:11px; color:var(--coral-1); margin-top:8px; font-weight:700; }
+  .order-card[data-status="approved"]{ cursor:pointer; transition:transform .12s, border-color .12s; }
+  .order-card[data-status="approved"]:active{ transform:scale(.98); border-color:rgba(168,85,247,.5); }
+
+  /* ===== NEW: Order detail overlay — account info + live authenticator code ===== */
+  .od-bg{ position:fixed; inset:0; z-index:70; background:rgba(4,2,8,.92); display:flex; align-items:flex-end;
+    justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
+  .od-bg.show{ opacity:1; pointer-events:all; }
+  .od-panel{ width:100%; max-width:520px; max-height:86vh; overflow-y:auto; background:var(--bg-2);
+    border:1px solid var(--line); border-top-left-radius:24px; border-top-right-radius:24px;
+    padding:20px 18px calc(24px + env(safe-area-inset-bottom)); box-shadow:0 -20px 50px rgba(0,0,0,.6);
+    transform:translateY(100%); transition:transform .3s cubic-bezier(.22,1,.36,1); }
+  .od-bg.show .od-panel{ transform:translateY(0); }
+  .od-handle{ width:38px; height:4px; border-radius:99px; background:var(--line); margin:0 auto 14px; }
+  .od-close{ position:absolute; top:14px; right:16px; width:34px; height:34px; border-radius:50%;
+    background:rgba(255,255,255,.06); border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+    color:var(--cloud); font-size:15px; z-index:2; cursor:pointer; }
+  .od-title{ font-size:16px; font-weight:800; color:var(--cloud); margin-bottom:2px; }
+  .od-sub{ font-size:12px; color:var(--muted); margin-bottom:14px; }
+  .od-warranty{ display:inline-flex; align-items:center; gap:6px; padding:6px 13px; border-radius:999px;
+    background:rgba(52,211,153,.1); border:1px solid rgba(52,211,153,.3); color:var(--warranty);
+    font-size:11.5px; font-weight:700; margin-bottom:14px; }
+  .od-warranty.expired{ background:rgba(255,90,90,.1); border-color:rgba(255,90,90,.3); color:var(--danger); }
+  .od-code-box{ display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--card);
+    border:1px solid rgba(168,85,247,.35); border-radius:16px; padding:16px; margin:8px 0 14px; }
+  .od-code-label{ font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:1px; }
+  .od-code-val{ font-family:'Space Mono',monospace; font-size:28px; font-weight:700; color:var(--cloud); letter-spacing:3px; margin-top:2px; }
+  .od-code-ring{ position:relative; width:40px; height:40px; flex-shrink:0; }
+  .od-code-ring svg{ transform:rotate(-90deg); }
+  .od-code-ring circle{ fill:none; stroke-width:3; }
+  .od-code-ring .bg{ stroke:rgba(255,255,255,.1); }
+  .od-code-ring .fg{ stroke:var(--coral-1); stroke-linecap:round; transition:stroke-dashoffset 1s linear; }
+  .od-loading{ text-align:center; color:var(--muted); font-size:12.5px; padding:30px 0; }
+  .od-loading .co-spin{ margin-bottom:12px; }
 
   .prow{ display:flex; align-items:center; justify-content:space-between; background:var(--card); border:1px solid var(--line);
     border-radius:16px; padding:14px 16px; margin-top:10px; cursor:pointer; }
@@ -317,7 +362,7 @@
       <audio id="bgMusic" loop preload="none">{% if music_url %}<source src="{{ music_url }}">{% endif %}</audio>
       <header>
         <div class="logo-ring"><div class="logo-ring-inner">
-          {% if logo_url %}<img src="{{ logo_url }}">{% else %}<div class="fallback">◆</div>{% endif %}
+          {% if logo_url %}<img src="{{ logo_url }}">{% else %}<div class="fallback">🖼️</div>{% endif %}
         </div></div>
         <div class="logo-word">UCHIRO</div>
         <div class="logo-sub">Blox Fruits · Multi-Game</div>
@@ -326,7 +371,7 @@
 
       <!-- ===== NEW: Hot Products carousel — pulls straight from your own categories/items ===== -->
       <div class="hot-wrap">
-        <div class="hot-eyebrow"><span>◆ Featured</span></div>
+        <div class="hot-eyebrow"><span>✨ Featured</span></div>
         <div class="hot-title">ទំនិញ <b>លក់ដាច់បំផុត</b></div>
         <div class="hot-stage">
           <div class="hot-track" id="hotTrack">
@@ -407,7 +452,7 @@
         <div class="back-btn" id="productBackBtn">←</div>
         <div class="back-title">ព័ត៌មានទំនិញ</div>
       </div>
-      <div class="thumb-big" id="pThumb"><div class="ph">◆</div></div>
+      <div class="thumb-big" id="pThumb"><div class="ph">🖼️</div></div>
       <div class="product-body">
         <div class="sheet-name" id="pName"></div>
         <div class="sheet-badges" id="pBadges"></div>
@@ -428,10 +473,10 @@
   </div>
 
   <nav class="bottomnav" id="bottomNav">
-    <div class="navitem active" data-screen="home"><span class="ni">⌂</span>ដើម</div>
-    <div class="navitem" data-screen="categories"><span class="ni">▤</span>ប្រភេទ</div>
-    <div class="navitem" data-screen="orders"><span class="ni">▧</span>Order</div>
-    <div class="navitem" data-screen="profile"><span class="ni">◈</span>គណនី</div>
+    <div class="navitem active" data-screen="home"><span class="ni">🏠</span>ដើម</div>
+    <div class="navitem" data-screen="categories"><span class="ni">🗂️</span>ប្រភេទ</div>
+    <div class="navitem" data-screen="orders"><span class="ni">🧾</span>Order</div>
+    <div class="navitem" data-screen="profile"><span class="ni">👤</span>គណនី</div>
   </nav>
 
   <div class="buybar" id="productBuyBar">
@@ -443,6 +488,15 @@
     <div class="lightbox-close" id="lightboxClose">✕</div>
     <img class="lightbox-img" id="lightboxImg" src="" alt="">
     <div class="lightbox-hint">ចុចលើរូបភាព ដើម្បីពង្រីក/បង្រួម</div>
+  </div>
+
+  <!-- ===== NEW: Order detail sheet — account info + live authenticator code ===== -->
+  <div class="od-bg" id="odBg">
+    <div class="od-panel" id="odPanel" style="position:relative;">
+      <div class="od-close" id="odClose">✕</div>
+      <div class="od-handle"></div>
+      <div id="odContent"><div class="od-loading"><div class="co-spin"></div>កំពុងផ្ទុក...</div></div>
+    </div>
   </div>
 
 <script>
@@ -526,7 +580,7 @@ async function loadItems(){
     CATEGORIES = data.categories;
     renderHomeGrid();
   }catch(e){
-    document.getElementById('homeGrid').innerHTML = '<div class="empty"><div class="em">⚠</div>មិនអាចផ្ទុកទិន្នន័យបានទេ<br>សូម Refresh ម្តងទៀត</div>';
+    document.getElementById('homeGrid').innerHTML = '<div class="empty"><div class="em">⚠️</div>មិនអាចផ្ទុកទិន្នន័យបានទេ<br>សូម Refresh ម្តងទៀត</div>';
   }
 }
 
@@ -542,7 +596,7 @@ function cardHTML(it){
 
 function renderGridInto(container, items, from){
   if (items.length === 0){
-    container.innerHTML = '<div class="empty"><div class="em">⌕</div>រកមិនឃើញទំនិញទេ</div>';
+    container.innerHTML = '<div class="empty"><div class="em">🔍</div>រកមិនឃើញទំនិញទេ</div>';
     return;
   }
   container.innerHTML = '';
@@ -624,21 +678,23 @@ async function loadMyOrders(){
     const res = await fetch(`/api/my-orders?init_data=${encodeURIComponent(initData)}`);
     const data = await res.json();
     if (!data.orders || !data.orders.length){
-      box.innerHTML = '<div class="empty"><div class="em">▧</div>អ្នកមិនទាន់មាន Order ណាទេ</div>';
+      box.innerHTML = '<div class="empty"><div class="em">🧾</div>អ្នកមិនទាន់មាន Order ណាទេ</div>';
       return;
     }
     const statusText = {pending:'កំពុងរង់ចាំ', approved:'អនុម័តរួច', rejected:'បដិសេធ'};
     box.innerHTML = data.orders.map(o=>`
-      <div class="order-card">
+      <div class="order-card" data-id="${o.id}" data-status="${o.status}" data-created="${o.created_at || ''}">
         <div class="order-top">
           <div class="order-name">#${o.id} ${o.item_name}</div>
           <div class="order-status ${o.status}">${statusText[o.status]||o.status}</div>
         </div>
         <div class="order-meta">${o.created_at}</div>
-        ${o.warranty ? `<div class="order-warranty">${o.warranty}</div>` : ''}
+        ${o.warranty ? `<div class="order-warranty" data-created="${o.created_at}">${o.warranty}</div>` : ''}
+        ${o.status === 'approved' ? `<div class="order-view-hint">ចុចមើលព័ត៌មានគណនី + កូដ Authenticator →</div>` : ''}
       </div>`).join('');
+    if (typeof tickWarranties === 'function') tickWarranties();
   }catch(e){
-    box.innerHTML = '<div class="empty"><div class="em">⚠</div>មិនអាចផ្ទុកបានទេ</div>';
+    box.innerHTML = '<div class="empty"><div class="em">⚠️</div>មិនអាចផ្ទុកបានទេ</div>';
   }
 }
 
@@ -1008,7 +1064,7 @@ loadItems();
     const ph = it.photo_url ? '' : `<div class="hot-ph">${HOT_ICONS[it.category] || '📦'}</div>`;
     return `<div class="hot-card" data-id="${it.id}">
       <div class="hot-thumb" ${bg}>
-        <div class="hot-badge">◆ ${it.category || 'Featured'}</div>
+        <div class="hot-badge">✨ ${it.category || 'Featured'}</div>
         ${ph}
       </div>
       <div class="hot-body">
@@ -1018,63 +1074,140 @@ loadItems();
     </div>`;
   }
 
+  let hotPressedId = null;
+
   function applyHotTilt(track){
     const rect = track.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
-    track.querySelectorAll('.hot-card').forEach(card=>{
+    let closestIdx = 0, closestDelta = Infinity;
+    const cards = track.querySelectorAll('.hot-card');
+    cards.forEach((card, idx)=>{
       const cRect = card.getBoundingClientRect();
       const cardCenter = cRect.left + cRect.width / 2;
       const delta = (cardCenter - centerX) / rect.width;
-      const rotate = Math.max(-22, Math.min(22, delta * -36));
-      const scale = Math.max(0.86, 1 - Math.abs(delta) * 0.16);
-      const translateY = Math.abs(delta) * 14;
-      card.style.transform = `perspective(1000px) rotateY(${rotate}deg) scale(${scale}) translateY(${translateY}px)`;
+      if (Math.abs(delta) < closestDelta){ closestDelta = Math.abs(delta); closestIdx = idx; }
+      const rotate = Math.max(-34, Math.min(34, delta * -52));
+      let scale = Math.max(0.78, 1 - Math.abs(delta) * 0.24);
+      const translateY = Math.abs(delta) * 26;
+      const translateZ = -Math.abs(delta) * 140;
+      let rotateX = 0;
+      // premium "press into the screen" 3D effect — the card you're actively touching
+      // dips back and tilts forward slightly, on top of its normal carousel tilt
+      if (card.dataset.id === hotPressedId){
+        scale *= 0.93;
+        rotateX = 8;
+      }
+      card.style.transform =
+        `perspective(1500px) rotateY(${rotate}deg) rotateX(${rotateX}deg) scale(${scale}) translateY(${translateY}px) translateZ(${translateZ}px)`;
       card.style.opacity = String(Math.max(0.45, 1 - Math.abs(delta) * 0.55));
+      // side cards angle away from the light — dim them slightly so the depth reads as real
+      card.style.filter = `brightness(${Math.max(0.6, 1 - Math.abs(delta) * 0.4)})`;
+      card.style.zIndex = String(100 - Math.round(Math.abs(delta) * 100));
     });
+    return closestIdx;
   }
 
   async function initHotCarousel(){
     const track = document.getElementById('hotTrack');
     if (!track) return;
-    let items = [];
+    let allItems = [];
     try{
       const res = await fetch('/api/items');
       const data = await res.json();
-      items = (data.items || []).slice(0, 10);
+      allItems = data.items || [];
     }catch(e){
       track.innerHTML = '<div class="hot-empty">មិនអាចផ្ទុកទំនិញបានទេ</div>';
       return;
     }
+    // Hot Products only features Account items (the ones with real cover photos,
+    // like the reference design) — falls back to everything if the shop has no
+    // Account stock yet, so the carousel is never left empty.
+    let items = allItems.filter(it => it.category === 'Account').slice(0, 10);
+    if (!items.length) items = allItems.slice(0, 10);
     if (!items.length){
       track.innerHTML = '<div class="hot-empty">មិនទាន់មានទំនិញនៅឡើយទេ</div>';
       return;
     }
     track.innerHTML = items.map(hotCardHTML).join('');
-    track.querySelectorAll('.hot-card').forEach(card=>{
+    const cardEls = Array.from(track.querySelectorAll('.hot-card'));
+
+    cardEls.forEach(card=>{
+      const id = card.dataset.id;
+
+      const press = ()=>{
+        if (hotPressedId === id) return;
+        hotPressedId = id;
+        card.classList.add('is-pressed');
+        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+        applyHotTilt(track);
+      };
+      const release = ()=>{
+        if (hotPressedId !== id) return;
+        hotPressedId = null;
+        card.classList.remove('is-pressed');
+        applyHotTilt(track);
+      };
+
+      card.addEventListener('pointerdown', press);
+      card.addEventListener('pointerup', release);
+      card.addEventListener('pointerleave', release);
+      card.addEventListener('pointercancel', release);
+
       card.addEventListener('click', ()=>{
         window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-        const id = card.dataset.id;
         const match = items.find(it => String(it.id) === String(id));
         if (match && typeof openProductPage === 'function') openProductPage(match, 'home');
       });
     });
 
+    let currentIndex = 0;
+
+    function scrollToIndex(i){
+      const card = cardEls[i];
+      if (!card) return;
+      const target = card.offsetLeft - (track.clientWidth - card.offsetWidth) / 2;
+      track.scrollTo({ left: target, behavior: 'smooth' });
+    }
+
     let ticking = false;
     track.addEventListener('scroll', ()=>{
       if (ticking) return;
       ticking = true;
-      requestAnimationFrame(()=>{ applyHotTilt(track); ticking = false; });
+      requestAnimationFrame(()=>{ currentIndex = applyHotTilt(track); ticking = false; });
     });
-    applyHotTilt(track);
+    currentIndex = applyHotTilt(track);
+
+    // ===== Auto-rotate: the carousel turns itself, like a slowly spinning display
+    // stand — pauses the moment someone touches it, and picks back up after a beat.
+    let autoTimer = null;
+    function startAuto(){
+      stopAuto();
+      autoTimer = setInterval(()=>{
+        currentIndex = (currentIndex + 1) % cardEls.length;
+        scrollToIndex(currentIndex);
+      }, 2600);
+    }
+    function stopAuto(){
+      if (autoTimer) clearInterval(autoTimer);
+      autoTimer = null;
+    }
+    let resumeTimer = null;
+    function pauseThenResume(){
+      stopAuto();
+      if (resumeTimer) clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(startAuto, 3200);
+    }
+    track.addEventListener('pointerdown', pauseThenResume, { passive:true });
+    track.addEventListener('touchstart', pauseThenResume, { passive:true });
+    startAuto();
 
     const prevBtn = document.getElementById('hotPrevBtn');
     const nextBtn = document.getElementById('hotNextBtn');
     function step(dir){
       window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-      const card = track.querySelector('.hot-card');
-      const gap = 14;
-      const width = card ? card.getBoundingClientRect().width + gap : 200;
-      track.scrollBy({ left: dir * width, behavior: 'smooth' });
+      pauseThenResume();
+      currentIndex = (currentIndex + dir + cardEls.length) % cardEls.length;
+      scrollToIndex(currentIndex);
     }
     if (prevBtn) prevBtn.onclick = ()=> step(-1);
     if (nextBtn) nextBtn.onclick = ()=> step(1);
@@ -1086,6 +1219,188 @@ loadItems();
     document.addEventListener('DOMContentLoaded', initHotCarousel);
   } else {
     initHotCarousel();
+  }
+})();
+</script>
+
+<!-- ===== NEW: Order detail sheet — live warranty countdown + account info + live authenticator code ===== -->
+<script>
+(function(){
+  const OD_WARRANTY_DAYS = 14;
+
+  function odParseDate(s){
+    if (!s) return null;
+    let d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+    d = new Date(String(s).replace(' ', 'T'));
+    if (!isNaN(d.getTime())) return d;
+    return null;
+  }
+
+  // Warranty is 14 days from the order date, counted live down to the hour —
+  // once it hits zero it flips to an "expired" state instead of going negative.
+  function odFormatWarranty(createdStr){
+    const start = odParseDate(createdStr);
+    if (!start) return null;
+    const expiry = new Date(start.getTime() + OD_WARRANTY_DAYS*24*60*60*1000);
+    const diff = expiry.getTime() - Date.now();
+    if (diff <= 0) return { text: '🛡️ Warranty ផុតកំណត់ហើយ', expired: true };
+    const totalHours = Math.floor(diff / 3600000);
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    return { text: `🛡️ Warranty នៅសល់ ${days}ថ្ងៃ ${hours}ម៉ោង`, expired: false };
+  }
+
+  // Exposed globally so loadMyOrders() (main script) can call it the instant a
+  // fresh order list is rendered, instead of waiting up to a minute for the tick.
+  window.tickWarranties = function(){
+    document.querySelectorAll('#ordersList .order-warranty[data-created]').forEach(el=>{
+      const res = odFormatWarranty(el.dataset.created);
+      if (!res) return;
+      el.textContent = res.text;
+      el.classList.toggle('expired', res.expired);
+    });
+  };
+  setInterval(window.tickWarranties, 60000);
+
+  // ===== Order detail sheet: tap an approved order to see account info + a
+  // live, auto-refreshing authenticator code (rotates with the real 30s TOTP window) =====
+  const odBg = document.getElementById('odBg');
+  const odClose = document.getElementById('odClose');
+  const odContent = document.getElementById('odContent');
+  let odRingTimer = null;
+
+  function odStopTimers(){
+    if (odRingTimer) clearInterval(odRingTimer);
+    odRingTimer = null;
+  }
+  function odCloseSheet(){
+    odBg.classList.remove('show');
+    odStopTimers();
+  }
+  odClose.onclick = odCloseSheet;
+  odBg.addEventListener('click', (e)=>{ if (e.target === odBg) odCloseSheet(); });
+
+  function odRenderLoading(){
+    odContent.innerHTML = '<div class="od-loading"><div class="co-spin"></div>កំពុងផ្ទុក...</div>';
+  }
+
+  async function odFetchCode(orderId, initData){
+    try{
+      const res = await fetch(`/api/order/${orderId}/refresh-code?init_data=${encodeURIComponent(initData)}`);
+      const j = await res.json();
+      return j.code || null;
+    }catch(e){ return null; }
+  }
+
+  function odStartLiveCode(orderId, initData){
+    const valEl = document.getElementById('odCodeVal');
+    const ringFg = document.getElementById('odRingFg');
+    if (!valEl) return;
+    const CIRC = 2 * Math.PI * 17;
+    let secondsLeft = 30 - (Math.floor(Date.now()/1000) % 30);
+
+    async function refreshNow(){
+      const code = await odFetchCode(orderId, initData);
+      if (code) valEl.textContent = code;
+      secondsLeft = 30 - (Math.floor(Date.now()/1000) % 30);
+    }
+    refreshNow();
+
+    odRingTimer = setInterval(()=>{
+      secondsLeft -= 1;
+      if (secondsLeft <= 0){ secondsLeft = 30; refreshNow(); }
+      if (ringFg) ringFg.style.strokeDashoffset = String(CIRC * (1 - secondsLeft/30));
+    }, 1000);
+  }
+
+  async function openOrderDetail(orderId, createdAt){
+    const initData = window.Telegram?.WebApp?.initData;
+    if (!initData) return;
+    odStopTimers();
+    odBg.classList.add('show');
+    odRenderLoading();
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+
+    let data;
+    try{
+      const res = await fetch(`/api/order/${orderId}/status?init_data=${encodeURIComponent(initData)}`);
+      data = await res.json();
+    }catch(e){
+      odContent.innerHTML = '<div class="od-loading">មិនអាចផ្ទុកព័ត៌មានបានទេ សូមសាកល្បងម្តងទៀត</div>';
+      return;
+    }
+    if (!data || data.status !== 'approved'){
+      odContent.innerHTML = '<div class="od-loading">Order នេះមិនទាន់អនុម័តទេ</div>';
+      return;
+    }
+
+    const hasInfo = data.delivery_info && data.delivery_info.trim();
+    const wr = odFormatWarranty(createdAt);
+    const warrantyChip = wr ? `<div class="od-warranty ${wr.expired ? 'expired' : ''}">${wr.text}</div>` : '';
+
+    let html = `
+      <div class="od-title">${data.item_name || ''}</div>
+      <div class="od-sub">Order #${orderId}</div>
+      ${warrantyChip}
+    `;
+
+    if (hasInfo){
+      // formatDeliveryText() is defined in the main app script above and shared
+      // across all script tags in this document — safe to reuse here as-is.
+      html += `<div class="co-delivery" id="odDeliveryText">${formatDeliveryText(data.delivery_info)}</div>
+        <button class="co-copybtn" id="odCopyBtn">Copy</button>`;
+
+      if (data.has_totp){
+        html += `
+          <div class="od-code-box">
+            <div>
+              <div class="od-code-label">Live Authenticator Code</div>
+              <div class="od-code-val" id="odCodeVal">------</div>
+            </div>
+            <div class="od-code-ring">
+              <svg width="40" height="40" viewBox="0 0 40 40">
+                <circle class="bg" cx="20" cy="20" r="17"></circle>
+                <circle class="fg" id="odRingFg" cx="20" cy="20" r="17"
+                  stroke-dasharray="${2*Math.PI*17}" stroke-dashoffset="0"></circle>
+              </svg>
+            </div>
+          </div>`;
+      }
+
+      html += `
+        <div class="guide-box">
+          <div class="guide-title">របៀប Login</div>
+          <ol class="guide-list">
+            ${data.has_totp
+              ? `<li>ពេលវាសួរកូដសុវត្ថិភាព (2FA) មើលកូដខាងលើ — កូដផ្លាស់រៀងរាល់ 30 វិនាទីដោយស្វ័យប្រវត្តិ ដូច្នេះមិនចាំបាច់ចុច Refresh ទេ</li>`
+              : `<li>Login ដោយប្រើ Username/Password ខាងលើ</li>`}
+            <li>បើមានបញ្ហា Login សូមចុច ទាក់ទង Admin ក្នុងផ្ទាំង គណនី</li>
+          </ol>
+        </div>`;
+    } else {
+      html += `<div class="co-note">ម្ចាស់ហាងបានផ្ញើព័ត៌មានឲ្យអ្នកតាម Telegram Chat</div>`;
+    }
+
+    odContent.innerHTML = html;
+
+    if (hasInfo){
+      const copyBtn = document.getElementById('odCopyBtn');
+      if (copyBtn) copyBtn.onclick = ()=>{
+        navigator.clipboard.writeText(document.getElementById('odDeliveryText').innerText);
+        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+      };
+      if (data.has_totp) odStartLiveCode(orderId, initData);
+    }
+  }
+
+  const ordersListEl = document.getElementById('ordersList');
+  if (ordersListEl){
+    ordersListEl.addEventListener('click', (e)=>{
+      const card = e.target.closest('.order-card');
+      if (!card || card.dataset.status !== 'approved') return;
+      openOrderDetail(card.dataset.id, card.dataset.created);
+    });
   }
 })();
 </script>
